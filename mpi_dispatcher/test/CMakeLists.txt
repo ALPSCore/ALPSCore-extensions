@@ -1,0 +1,16 @@
+include(ALPSEnableTests)
+set(mpi_tests mpi_dispatcher_test)
+
+if (ALPS_HAVE_MPI)
+    add_executable(mpi_dispatcher_test mpi_dispatcher_test.cpp)
+    target_link_libraries(mpi_dispatcher_test ${PROJECT_NAME})
+    find_package(MPI)
+    target_link_libraries(${test} ${PROJECT_NAME})
+    foreach (np 2 4 8 16)
+        foreach (test ${mpi_tests})
+            set(test_parameters ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${test} ${MPIEXEC_POSTFLAGS})
+            add_test(NAME ${test}${np}cpu COMMAND "${MPIEXEC}" ${test_parameters})
+        endforeach (test)
+    endforeach (np)
+endif ()
+

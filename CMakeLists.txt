@@ -43,6 +43,8 @@ if (Testing AND NOT DocumentationOnly)
 endif(Testing AND NOT DocumentationOnly)
 
 # each module is defined as a cmake project in a subdirectory
+add_subdirectory(mpi_dispatcher)
+alps_add_module(alps-mpi_dispatcher mpi_dispatcher)
 add_subdirectory(mc)
 alps_add_module(alps-mc-extensions mc)
 
