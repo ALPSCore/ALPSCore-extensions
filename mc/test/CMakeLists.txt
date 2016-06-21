@@ -5,18 +5,12 @@ set (test_src
     mc_metropolis_test02
     )
 
-foreach(test ${test_src})
-    alps_add_gtest(${test})
-endforeach(test)
-
-#add tests for MPI
-if(ALPS_HAVE_MPI)
-
-set (test_src_mpi
-    mc_metropolis_test02
-    )
-foreach(test ${test_src_mpi})
-    alps_add_gtest(${test} NOMAIN PARTEST)
-endforeach(test)
-
-endif(ALPS_HAVE_MPI)
+if(ALPSCore_HAS_MPI)
+    foreach(test ${test_src})
+        alps_add_gtest(${test} NOMAIN PARTEST)
+    endforeach(test)
+else()
+    foreach(test ${test_src})
+        alps_add_gtest(${test})
+    endforeach(test)
+endif(ALPSCore_HAS_MPI)

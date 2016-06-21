@@ -62,6 +62,7 @@ find_package(ALPSCore REQUIRED COMPONENTS hdf5 accumulators mc params)
     message(STATUS "ALPSCore libraries: ${ALPSCore_LIBRARIES}")
     include_directories(${ALPSCore_INCLUDE_DIRS})
     link_libraries(${ALPSCore_LIBRARIES})
+    set(ALPS_HAVE_MPI ${ALPSCore_HAS_MPI})
 endmacro(add_alpscore)
 
 
