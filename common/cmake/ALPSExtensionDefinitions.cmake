@@ -57,7 +57,7 @@ endmacro(no_source_builds)
 
 # ALPSCore - brings MPI, HDF5, boost 
 macro(add_alpscore)
-find_package(ALPSCore REQUIRED COMPONENTS hdf5 accumulators mc params)
+find_package(ALPSCore REQUIRED COMPONENTS ${ARGV})
     message(STATUS "ALPSCore includes:  ${ALPSCore_INCLUDES}")
     message(STATUS "ALPSCore libraries: ${ALPSCore_LIBRARIES}")
     include_directories(${ALPSCore_INCLUDE_DIRS})

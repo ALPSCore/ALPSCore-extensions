@@ -19,13 +19,13 @@ if (DocumentationOnly)
   return()
 endif ()
 
-add_alpscore()
+add_alpscore(mc)
 cxx11()
 fix_rpath()
 no_source_builds()
 
 add_this_package(mc_metropolis)
-add_alps_package(alps-utilities alps-hdf5 alps-params alps-accumulators)
+add_alps_package(alps-mc)
 
 add_testing()
 
