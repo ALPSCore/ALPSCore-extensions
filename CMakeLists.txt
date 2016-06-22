@@ -34,7 +34,7 @@ if (Documentation)
 endif(Documentation)
 
 # enable Testing
-option(Testing "Enable testing" ON)
+option(Testing "Enable testing" OFF)
 option(ExtensiveTesting "Enable extensive testing, including time consuming tests" OFF)
 mark_as_advanced(ExtensiveTesting)
 if (Testing AND NOT DocumentationOnly)
