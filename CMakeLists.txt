@@ -18,6 +18,9 @@ include(ALPSCompilerTweaks)
 # ALPS_GLOBAL_BUILD means building project all at once
 set(ALPS_GLOBAL_BUILD true)
 
+find_package(Eigen3 REQUIRED)
+find_package(LAPACK REQUIRED)
+
 # Documentation
 option(DocumentationOnly "Build only documentation, no code or tests" OFF)
 mark_as_advanced(DocumentationOnly)
@@ -47,6 +50,8 @@ add_subdirectory(mpi_dispatcher)
 alps_add_module(alps-mpi_dispatcher mpi_dispatcher)
 add_subdirectory(mc)
 alps_add_module(alps-mc-extensions mc)
+add_subdirectory(gf_extension)
+alps_add_module(alps-gf-extensions gf_extension)
 
 if(_am_building_documentation)
     set(DOXYFILE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/common/doc")
