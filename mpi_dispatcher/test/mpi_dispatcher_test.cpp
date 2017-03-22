@@ -1,6 +1,7 @@
 #include <alps/mpi_dispatcher/mpi_dispatcher.hpp>
 #include <thread>
 #include <random>
+#include <iostream>
 
 using namespace alps;
 
