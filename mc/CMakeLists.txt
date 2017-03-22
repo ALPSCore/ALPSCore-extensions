@@ -25,7 +25,7 @@ fix_rpath()
 no_source_builds()
 
 add_this_package(mc_metropolis)
-add_alps_package(alps-mc)
+#add_alps_package(alps-mc)
 
 add_testing()
 
