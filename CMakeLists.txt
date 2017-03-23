@@ -18,9 +18,6 @@ include(ALPSCompilerTweaks)
 # ALPS_GLOBAL_BUILD means building project all at once
 set(ALPS_GLOBAL_BUILD true)
 
-find_package(Eigen3 REQUIRED)
-find_package(LAPACK REQUIRED)
-
 # Documentation
 option(DocumentationOnly "Build only documentation, no code or tests" OFF)
 mark_as_advanced(DocumentationOnly)

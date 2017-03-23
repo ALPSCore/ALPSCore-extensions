@@ -8,6 +8,9 @@ cmake_minimum_required (VERSION 2.8.12)
 project (alps-gf-extensions CXX)
 message ("\nALPSCore module : ${PROJECT_NAME}\n")
 
+find_package(Eigen3 REQUIRED)
+find_package(LAPACK REQUIRED)
+
 # add common modules from ../common/cmake
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../common/cmake)
 # add common definitions
@@ -28,8 +31,6 @@ add_this_package(gf_extension)
 target_include_directories(alps-gf-extensions PUBLIC ${EIGEN3_INCLUDE_DIR})
 target_compile_options(alps-gf-extensions PRIVATE ${LAPACK_LINKER_FLAGS})
 target_link_libraries(alps-gf-extensions PRIVATE ${LAPACK_LIBRARIES})
-
-add_alps_package(alps-gf)
 
 add_testing()
 
