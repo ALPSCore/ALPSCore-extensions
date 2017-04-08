@@ -139,7 +139,7 @@ function(add_this_package)
   target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_BINARY_DIR}/include)
 
   install(DIRECTORY include DESTINATION .
-          FILES_MATCHING PATTERN "*.hpp" PATTERN "*.hxx"
+          FILES_MATCHING PATTERN "*.hpp" PATTERN "*.hxx" PATTERN "*.ipp"
          )
 endfunction(add_this_package)
 

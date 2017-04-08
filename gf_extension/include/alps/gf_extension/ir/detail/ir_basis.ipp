@@ -1,7 +1,7 @@
 #include "../ir_basis.hpp"
 #include <alps/gf_extension/numerical_mesh.hpp>
 
-#include "spline.h"
+#include "spline.hpp"
 
 extern "C" void dgesvd_(const char *jobu, const char *jobvt,
                         const int *m, const int *n, double *a, const int *lda,
