@@ -148,6 +148,44 @@ TYPED_TEST(HighTTest, BsisTypes) {
   }
 }
 
+TEST(IrBasis, DiscretizationError) {
+  try {
+    const double Lambda = 10000.0;
+    const int max_dim = 30;
+
+    std::vector<int> n_points{500};
+
+    const int nx = 10000;
+    std::vector<double> x_points;
+    for (int i = 0; i < nx; ++i) {
+      x_points.push_back(
+          std::tanh(
+              0.5 * M_PI * std::sinh(i * 2.0 / (nx - 1) - 1.0)
+          )
+      );
+    }
+
+    for (int nptr: n_points) {
+      alps::gf_extension::ir::fermionic_basis basis(Lambda, max_dim, 1e-10, nptr);
+      alps::gf_extension::ir::fermionic_basis basis2(Lambda, max_dim, 1e-10, 2 * nptr);
+
+      double max_diff = 0.0;
+      for (int b = 0; b < std::max(basis.dim(), basis2.dim()); ++b) {
+        for (double x : x_points) {
+          max_diff = std::max(
+              max_diff,
+              std::abs(basis(b).compute_value(x) - basis2(b).compute_value(x))
+          );
+        }
+      }
+      ASSERT_NEAR(max_diff, 0.0, 0.01);
+    }
+  } catch (const std::exception& e) {
+    FAIL() << e.what();
+  }
+}
+
+
 TEST(IrBasis, FermionInsulatingGtau) {
   try {
     const double Lambda = 300.0, beta = 100.0;
@@ -207,5 +245,133 @@ TEST(IrBasis, FermionInsulatingGtau) {
 
   } catch (const std::exception& e) {
     FAIL() << e.what();
+  }
+}
+
+namespace g = alps::gf;
+namespace ge = alps::gf_extension;
+
+class GfTest : public testing::Test {
+ protected:
+  typedef alps::gf::piecewise_polynomial<double> pp_type;
+  using gl_type = ge::nmesh_three_index_gf<double, g::index_mesh, g::index_mesh>;
+  using gtau_type = ge::itime_three_index_gf<double, g::index_mesh, g::index_mesh>;
+  using gomega_type = ge::omega_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
+
+  double Lambda = 300.0;
+  double beta = 100.0;
+  int max_dim = 100;
+  alps::gf_extension::ir::fermionic_basis basis;
+  gl_type Gl;
+  gtau_type Gtau;
+  gomega_type Gomega;
+
+  double compute_gx(double x) const {
+    return std::exp(-0.5*beta)*std::cosh(-0.5*beta*x);
+  }
+
+  double compute_gtau(double tau) const {
+    return compute_gx( 2 * tau/beta - 1);
+  }
+
+  std::complex<double> compute_gomega(int n) const {
+    const std::complex<double> zi(0.0, 1.0);
+    double wn = (2.*n+1)*M_PI/beta;
+    return - 0.5/(zi*wn - 1.0) - 0.5/(zi*wn + 1.0);
+  }
+
+  GfTest() : basis(alps::gf_extension::ir::fermionic_basis(Lambda, max_dim, 1e-10, 501)),
+             Gtau(g::itime_mesh(beta, basis(0).num_sections()+1), g::index_mesh(1), g::index_mesh(1)),
+             Gl(g::numerical_mesh<double>(beta, basis.all(), g::statistics::FERMIONIC), g::index_mesh(1), g::index_mesh(1))
+  {}
+
+  virtual void SetUp() {
+    try {
+      // Compute G(tau) for a model system: Delta peaks at omega = +/- 1
+      const int nptr = basis(0).num_sections() + 1;
+      std::vector<double> x(nptr), y(nptr);
+      for (int i = 0; i < nptr; ++i) {
+        x[i] = basis(0).section_edge(i);
+        y[i] = compute_gx(x[i]);
+      }
+      pp_type gtau(alps::gf_extension::ir::construct_piecewise_polynomial_cspline<double>(x, y));
+
+      // Then expand G(tau) in terms of the ir basis to compute the coefficients
+      std::vector<double> coeff(basis.dim());
+      for (int l = 0; l < basis.dim(); ++l) {
+        coeff[l] = gtau.overlap(basis(l)) * beta / std::sqrt(2.0);
+      }
+
+      // Then transform the data back to imaginary-time domain as y_r[i] and compare it to the original one y[i].
+      std::vector<double> y_r(nptr, 0.0);
+      for (int l = 0; l < 30; ++l) {
+        for (int i = 0; i < nptr; ++i) {
+          y_r[i] += coeff[l] * (std::sqrt(2.0)/beta) * basis(l).compute_value(x[i]);
+        }
+      }
+
+      double max_diff = 0.0;
+      for (int i = 0; i < nptr; ++i) {
+        max_diff = std::max(std::abs(y[i]-y_r[i]), max_diff);
+        ASSERT_TRUE(std::abs(y[i]-y_r[i]) < 1e-6);
+      }
+
+      const auto i0 = g::index_mesh::index_type(0);
+
+      for (int i = 0; i < nptr; ++i) {
+        double tau = beta * i/(nptr-1);
+        Gtau(g::itime_mesh::index_type(i), i0, i0) = compute_gtau(tau);
+      }
+
+      // Construct a gf object of numerical mesh
+      for (int l = 0; l < basis.dim(); ++l) {
+        Gl(g::numerical_mesh<double>::index_type(l), i0, i0) = coeff[l];
+      }
+    } catch (const std::exception& e) {
+      FAIL() << e.what();
+    }
+  }
+
+  //virtual void TearDown() {}
+
+};
+
+TEST_F(GfTest, Gtau) {
+  const auto i0 = g::index_mesh::index_type(0);
+  for (int i = 0; i < Gtau.mesh1().extent(); ++i) {
+    double tau = Gtau.mesh1().points()[i];
+    ASSERT_TRUE(std::abs(Gtau(g::itime_mesh::index_type(i), i0, i0)-compute_gtau(tau)) < 1e-5);
+  }
+}
+
+TEST_F(GfTest, IrtoTau) {
+  const auto i0 = g::index_mesh::index_type(0);
+
+  ge::converter<gtau_type, gl_type> c(beta, Gtau.mesh1().extent());
+
+  gtau_type Gtau_tmp(c(Gl));
+
+  for (int i = 0; i < Gtau_tmp.mesh1().extent(); ++i) {
+    double tau = Gtau.mesh1().points()[i];
+    ASSERT_TRUE(std::abs(Gtau_tmp(g::itime_mesh::index_type(i), i0, i0)-compute_gtau(tau)) < 1e-6);
+  }
+}
+
+TEST_F(GfTest, IrtoMatsubara) {
+  const auto i0 = g::index_mesh::index_type(0);
+
+  const int niw = 1000;
+
+  ge::converter<gomega_type, gl_type> c(beta, niw);
+
+  gomega_type Gomega_tmp(c(Gl));
+
+  for (int i = 0; i < Gomega_tmp.mesh1().extent(); ++i) {
+    //std::cout << " " << i << " " << Gomega_tmp(g::matsubara_positive_mesh::index_type(i), i0, i0).imag() << " " << compute_gomega(i).imag() << std::endl;
+    ASSERT_TRUE(
+        std::abs(
+            Gomega_tmp(g::matsubara_positive_mesh::index_type(i), i0, i0)-compute_gomega(i)
+        ) < 1e-6
+    );
   }
 }

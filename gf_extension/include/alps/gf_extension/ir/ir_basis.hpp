@@ -11,7 +11,7 @@
 #include <boost/shared_ptr.hpp>
 
 #include <alps/gf/mesh.hpp>
-#include <alps/gf_extension/numerical_mesh.hpp>
+#include <alps/gf_extension/converter.hpp>
 
 
 namespace alps {
@@ -145,6 +145,11 @@ namespace ir {
     const pp_type &operator()(int l) const { return basis_functions_[l]; }
 
     /**
+     * Return a reference to all basis functions
+     */
+    const std::vector<pp_type> all() const { return basis_functions_; }
+
+    /**
      * Return number of basis functions
      * @return  number of basis functions
      */
@@ -165,6 +170,11 @@ namespace ir {
     void compute_Tnl(
         int n_min, int n_max,
         boost::multi_array<std::complex<double>, 2> &Tnl
+    ) const;
+
+    void compute_Tnl(
+        int n_min, int n_max,
+        Eigen::Tensor<std::complex<double>, 2> &Tnl
     ) const;
   };
 

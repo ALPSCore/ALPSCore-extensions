@@ -28,7 +28,7 @@ fix_rpath()
 no_source_builds()
 
 add_this_package(gf_extension)
-target_include_directories(alps-gf-extensions PUBLIC ${EIGEN3_INCLUDE_DIR})
+target_include_directories(alps-gf-extensions PUBLIC ${EIGEN3_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR}/unsupported)
 target_compile_options(alps-gf-extensions PRIVATE ${LAPACK_LINKER_FLAGS})
 target_link_libraries(alps-gf-extensions PRIVATE ${LAPACK_LIBRARIES})
 
