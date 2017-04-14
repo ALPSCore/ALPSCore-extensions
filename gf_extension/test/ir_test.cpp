@@ -125,7 +125,7 @@ TYPED_TEST(HighTTest, BsisTypes) {
     }
 
     //check transformation matrix to Matsubara frequencies
-    if (basis.get_statistics() == alps::gf_extension::fermionic) {
+    if (basis.get_statistics() == alps::gf::statistics::FERMIONIC) {
 
       const int N_iw = 3;
       //time_t t1, t2;

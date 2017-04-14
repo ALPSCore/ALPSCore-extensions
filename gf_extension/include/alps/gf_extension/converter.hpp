@@ -36,7 +36,7 @@ namespace gf_extension {
   template<class T>
   void compute_transformation_matrix_to_matsubara(
       int n_min, int n_max,
-      statistics statis,
+      alps::gf::statistics::statistics_type statis,
       const std::vector <alps::gf::piecewise_polynomial<T> > &bf_src,
       Eigen::Tensor<std::complex<double>, 2> &Tnl
   );
@@ -164,7 +164,7 @@ namespace gf_extension {
     template<class T>
     void construct_matsubra_basis_functions(
         int n_min, int n_max,
-        statistics s,
+        alps::gf::statistics::statistics_type s,
         const std::vector<double> &section_edges,
         int k,
         std::vector<alps::gf::piecewise_polynomial<std::complex<T> > > &results) {
@@ -184,9 +184,9 @@ namespace gf_extension {
       }
 
       for (int n = n_min; n <= n_max; ++n) {
-        if (s == fermionic) {
+        if (s == alps::gf::statistics::FERMIONIC) {
           z = -std::complex<double>(0.0, n + 0.5) * M_PI;
-        } else if (s == bosonic) {
+        } else if (s == alps::gf::statistics::BOSONIC) {
           z = -std::complex<double>(0.0, n) * M_PI;
         }
         for (int section = 0; section < N; ++section) {
@@ -295,7 +295,7 @@ namespace gf_extension {
 
       compute_transformation_matrix_to_matsubara(
           0, niw_-1,
-          p_nmesh_->statistics() == alps::gf::statistics::FERMIONIC ? fermionic : bosonic,
+          p_nmesh_->statistics(),
           basis_functions,
           Tnl_
       );
@@ -357,7 +357,7 @@ namespace gf_extension {
   template<class T>
   void compute_transformation_matrix_to_matsubara(
       int n_min, int n_max,
-      statistics statis,
+      alps::gf::statistics::statistics_type statis,
       const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
       Eigen::Tensor<std::complex<double>,2> &Tnl
   ) {
@@ -426,9 +426,9 @@ namespace gf_extension {
       //Compute the overlap exactly for M_PI*(n+0.5)*dx > cutoff*M_PI
       for (int n = n_max_cs + 1; n <= n_max; ++n) {
         std::complex<double> z;
-        if (statis == fermionic) {
+        if (statis == alps::gf::statistics::FERMIONIC) {
           z = std::complex<double>(0.0, n + 0.5) * M_PI;
-        } else if (statis == bosonic) {
+        } else if (statis == alps::gf::statistics::BOSONIC) {
           z = std::complex<double>(0.0, n) * M_PI;
         }
 

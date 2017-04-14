@@ -38,7 +38,7 @@ namespace ir {
     virtual T operator()(double x, double y) const = 0;
 
     /// return statistics
-    virtual alps::gf_extension::statistics get_statistics() const = 0;
+    virtual alps::gf::statistics::statistics_type get_statistics() const = 0;
 
     /// return a reference to a copy
     virtual boost::shared_ptr<kernel> clone() const = 0;
@@ -62,8 +62,8 @@ namespace ir {
       }
     }
 
-    alps::gf_extension::statistics get_statistics() const {
-      return fermionic;
+    alps::gf::statistics::statistics_type get_statistics() const {
+      return alps::gf::statistics::FERMIONIC;
     }
 
     boost::shared_ptr<kernel> clone() const {
@@ -94,8 +94,8 @@ namespace ir {
       }
     }
 
-    alps::gf_extension::statistics get_statistics() const {
-      return bosonic;
+    alps::gf::statistics::statistics_type get_statistics() const {
+      return alps::gf::statistics::BOSONIC;
     }
 
     boost::shared_ptr<kernel> clone() const {
@@ -156,7 +156,7 @@ namespace ir {
     int dim() const { return basis_functions_.size(); }
 
     /// Return statistics
-    alps::gf_extension::statistics get_statistics() const {
+    alps::gf::statistics::statistics_type get_statistics() const {
       return p_knl_->get_statistics();
     }
 
