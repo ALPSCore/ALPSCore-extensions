@@ -1,7 +1,7 @@
-#include <alps/gf_extension/converter.hpp>
+#include <alps/gf_extension/transformer.hpp>
 
-#include <alps/gf_extension/ir/ir_basis.hpp>
-#include <alps/gf_extension/ir/detail/ir_basis.ipp>
+#include <alps/gf_extension/ir_basis.hpp>
+#include <alps/gf_extension/detail/ir_basis.ipp>
 
 namespace alps {
   namespace gf_extension {
@@ -12,13 +12,11 @@ namespace alps {
         //boost::multi_array<std::complex<double>, 2> &Tnl
     //);
 
-    namespace ir {
-      template
-      class basis<double>;
+    template
+    class ir_basis<double>;
 
-      template
-      alps::gf::piecewise_polynomial<double> construct_piecewise_polynomial_cspline(
-          const std::vector<double> &x_array, const std::vector<double> &y_array);
+    template
+    alps::gf::piecewise_polynomial<double> construct_piecewise_polynomial_cspline(
+        const std::vector<double> &x_array, const std::vector<double> &y_array);
     }
-  }
 }

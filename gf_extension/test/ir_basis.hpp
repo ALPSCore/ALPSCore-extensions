@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "alps/gf_extension/ir/ir_basis.hpp"
+#include "alps/gf_extension/ir_basis.hpp"
 
 #include <boost/math/special_functions/bessel.hpp>
 #include <boost/multi_array.hpp>

@@ -1,4 +1,4 @@
-#include "ir_test.hpp"
+#include "ir_basis.hpp"
 
 TEST(PiecewisePolynomial, Orthogonalization) {
     typedef double Scalar;
@@ -81,7 +81,7 @@ template<class T>
 class HighTTest : public testing::Test {
 };
 
-typedef ::testing::Types<alps::gf_extension::ir::fermionic_basis, alps::gf_extension::ir::bosonic_basis> BasisTypes;
+typedef ::testing::Types<alps::gf_extension::fermionic_ir_basis, alps::gf_extension::bosonic_ir_basis> BasisTypes;
 
 TYPED_TEST_CASE(HighTTest, BasisTypes);
 
@@ -90,7 +90,6 @@ TYPED_TEST(HighTTest, BsisTypes) {
     //construct ir basis
     const double Lambda = 0.01;//high T
     const int max_dim = 100;
-    //alps::gf_extension::ir::basis<double,TypeParam> basis(Lambda, max_dim);
     TypeParam basis(Lambda, max_dim);
     ASSERT_TRUE(basis.dim()>3);
 
@@ -128,14 +127,12 @@ TYPED_TEST(HighTTest, BsisTypes) {
     if (basis.get_statistics() == alps::gf::statistics::FERMIONIC) {
 
       const int N_iw = 3;
-      //time_t t1, t2;
 
       boost::multi_array<std::complex<double>,2> Tnl_legendre(boost::extents[N_iw][3]),
           Tnl_ir(boost::extents[N_iw][3]);
 
       compute_Tnl_legendre(N_iw, 3, Tnl_legendre);
 
-      //Fast version
       basis.compute_Tnl(0, N_iw-1, Tnl_ir);
       for (int n = 0; n < N_iw; n++) {
         for (int l = 0; l < 3; ++l) {
@@ -166,8 +163,8 @@ TEST(IrBasis, DiscretizationError) {
     }
 
     for (int nptr: n_points) {
-      alps::gf_extension::ir::fermionic_basis basis(Lambda, max_dim, 1e-10, nptr);
-      alps::gf_extension::ir::fermionic_basis basis2(Lambda, max_dim, 1e-10, 2 * nptr);
+      alps::gf_extension::fermionic_ir_basis basis(Lambda, max_dim, 1e-10, nptr);
+      alps::gf_extension::fermionic_ir_basis basis2(Lambda, max_dim, 1e-10, 2 * nptr);
 
       double max_diff = 0.0;
       for (int b = 0; b < std::max(basis.dim(), basis2.dim()); ++b) {
@@ -190,7 +187,7 @@ TEST(IrBasis, FermionInsulatingGtau) {
   try {
     const double Lambda = 300.0, beta = 100.0;
     const int max_dim = 100;
-    alps::gf_extension::ir::fermionic_basis basis(Lambda, max_dim, 1e-10, 501);
+    alps::gf_extension::fermionic_ir_basis basis(Lambda, max_dim, 1e-10, 501);
     ASSERT_TRUE(basis.dim()>0);
 
     typedef alps::gf::piecewise_polynomial<double> pp_type;
@@ -201,7 +198,7 @@ TEST(IrBasis, FermionInsulatingGtau) {
       x[i] = basis(0).section_edge(i);
       y[i] = std::exp(-0.5*beta)*std::cosh(-0.5*beta*x[i]);
     }
-    pp_type gtau(alps::gf_extension::ir::construct_piecewise_polynomial_cspline<double>(x, y));
+    pp_type gtau(alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y));
 
     std::vector<double> coeff(basis.dim());
     for (int l = 0; l < basis.dim(); ++l) {
@@ -248,6 +245,33 @@ TEST(IrBasis, FermionInsulatingGtau) {
   }
 }
 
+/*
+TEST(PiecewisePolynomial, IntegrationWithPower) {
+  //using dcomplex = std::complex<double>;
+
+  const int k = 100;//order of piecewise polynomial
+  const double rnd = 1.2;
+  const double xmin = -1.0;
+  const double xmax = 1.0;
+  const int N = 100;//# of edges
+
+  //rnd * x^n
+  for (int n = 0; n < 10; ++n) {
+    auto m = n;
+
+    auto edges = alps::gf_extension::linspace(xmin, xmax, N);
+    std::vector<double> vals(N);
+    for (int i=0; i < edges.size(); ++i) {
+      vals[i] = rnd * std::pow(edges[i], n);
+    }
+    auto p = alps::gf_extension::construct_piecewise_polynomial_cspline<double>(edges, vals);
+
+    auto r = alps::gf_extension::integrate_with_power(m, p);
+    std::cout << r << " " << rnd * (std::pow(xmax,n+m+1)-std::pow(xmin, n+m+1))/(n+m+1) << std::endl;
+  }
+}
+*/
+
 namespace g = alps::gf;
 namespace ge = alps::gf_extension;
 
@@ -255,13 +279,14 @@ class GfTest : public testing::Test {
  protected:
   typedef alps::gf::piecewise_polynomial<double> pp_type;
   using gl_type = ge::nmesh_three_index_gf<double, g::index_mesh, g::index_mesh>;
+  using complex_gl_type = ge::nmesh_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
   using gtau_type = ge::itime_three_index_gf<double, g::index_mesh, g::index_mesh>;
   using gomega_type = ge::omega_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
 
   double Lambda = 300.0;
   double beta = 100.0;
   int max_dim = 100;
-  alps::gf_extension::ir::fermionic_basis basis;
+  alps::gf_extension::fermionic_ir_basis basis;
   gl_type Gl;
   gtau_type Gtau;
   gomega_type Gomega;
@@ -280,7 +305,7 @@ class GfTest : public testing::Test {
     return - 0.5/(zi*wn - 1.0) - 0.5/(zi*wn + 1.0);
   }
 
-  GfTest() : basis(alps::gf_extension::ir::fermionic_basis(Lambda, max_dim, 1e-10, 501)),
+  GfTest() : basis(alps::gf_extension::fermionic_ir_basis(Lambda, max_dim, 1e-10, 501)),
              Gtau(g::itime_mesh(beta, basis(0).num_sections()+1), g::index_mesh(1), g::index_mesh(1)),
              Gl(g::numerical_mesh<double>(beta, basis.all(), g::statistics::FERMIONIC), g::index_mesh(1), g::index_mesh(1))
   {}
@@ -294,7 +319,7 @@ class GfTest : public testing::Test {
         x[i] = basis(0).section_edge(i);
         y[i] = compute_gx(x[i]);
       }
-      pp_type gtau(alps::gf_extension::ir::construct_piecewise_polynomial_cspline<double>(x, y));
+      pp_type gtau(alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y));
 
       // Then expand G(tau) in terms of the ir basis to compute the coefficients
       std::vector<double> coeff(basis.dim());
@@ -327,6 +352,8 @@ class GfTest : public testing::Test {
       for (int l = 0; l < basis.dim(); ++l) {
         Gl(g::numerical_mesh<double>::index_type(l), i0, i0) = coeff[l];
       }
+
+
     } catch (const std::exception& e) {
       FAIL() << e.what();
     }
@@ -347,7 +374,7 @@ TEST_F(GfTest, Gtau) {
 TEST_F(GfTest, IrtoTau) {
   const auto i0 = g::index_mesh::index_type(0);
 
-  ge::converter<gtau_type, gl_type> c(beta, Gtau.mesh1().extent());
+  ge::transformer<gtau_type, gl_type> c(Gtau.mesh1().extent(), Gl.mesh1());
 
   gtau_type Gtau_tmp(c(Gl));
 
@@ -357,17 +384,16 @@ TEST_F(GfTest, IrtoTau) {
   }
 }
 
-TEST_F(GfTest, IrtoMatsubara) {
+TEST_F(GfTest, IRtoMatsubara) {
   const auto i0 = g::index_mesh::index_type(0);
 
   const int niw = 1000;
 
-  ge::converter<gomega_type, gl_type> c(beta, niw);
+  ge::transformer<gomega_type, gl_type> c(niw, Gl.mesh1());
 
   gomega_type Gomega_tmp(c(Gl));
 
   for (int i = 0; i < Gomega_tmp.mesh1().extent(); ++i) {
-    //std::cout << " " << i << " " << Gomega_tmp(g::matsubara_positive_mesh::index_type(i), i0, i0).imag() << " " << compute_gomega(i).imag() << std::endl;
     ASSERT_TRUE(
         std::abs(
             Gomega_tmp(g::matsubara_positive_mesh::index_type(i), i0, i0)-compute_gomega(i)
@@ -375,3 +401,25 @@ TEST_F(GfTest, IrtoMatsubara) {
     );
   }
 }
+
+/*
+TEST_F(GfTest, MatsubaraToIR) {
+const auto i0 = g::index_mesh::index_type(0);
+
+const int niw = 10000;
+
+//gomega_type Gomega(g::matsubara_positive_mesh(beta, niw), Gl.mesh2(), Gl.mesh3());
+
+//ge::transformer<complex_gl_type, gomega_type> c(Gl.mesh1(), Gomega.mesh1());
+
+//gomega_type Gomega_tmp(c(Gl));
+
+ for (int i = 0; i < Gomega_tmp.mesh1().extent(); ++i) {
+  ASSERT_TRUE(
+      std::abs(
+          Gomega_tmp(g::matsubara_positive_mesh::index_type(i), i0, i0)-compute_gomega(i)
+      ) < 1e-6
+  );
+}
+}
+*/

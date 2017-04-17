@@ -16,7 +16,6 @@ extern "C" void dgesdd_(const char *jobz,
 
 namespace alps {
   namespace gf_extension {
-    namespace ir {
       namespace detail {
         template<typename T>
         inline std::vector<T> linspace(T minval, T maxval, int N) {
@@ -186,7 +185,7 @@ namespace alps {
       }
 
       template<typename Scalar>
-      basis<Scalar>::basis(const kernel<Scalar>& knl, int max_dim, double cutoff, int N) : p_knl_(knl.clone())
+      ir_basis<Scalar>::ir_basis(const kernel<Scalar>& knl, int max_dim, double cutoff, int N) : p_knl_(knl.clone())
       {
         std::vector<double> even_svalues, odd_svalues, svalues;
         std::vector<pp_type> even_basis_functions, odd_basis_functions;
@@ -228,7 +227,7 @@ namespace alps {
 
       template<typename Scalar>
       void
-      basis<Scalar>::value(double x, std::vector<double> &val) const {
+      ir_basis<Scalar>::value(double x, std::vector<double> &val) const {
         assert(val.size() >= basis_functions_.size());
         assert(x >= -1.00001 && x <= 1.00001);
 
@@ -245,7 +244,7 @@ namespace alps {
 
       template<typename Scalar>
       void
-      basis<Scalar>::compute_Tnl(
+      ir_basis<Scalar>::compute_Tnl(
           int n_min, int n_max,
           boost::multi_array<std::complex<double>, 2> &Tnl
       ) const {
@@ -262,7 +261,7 @@ namespace alps {
 
       template<typename Scalar>
       void
-      basis<Scalar>::compute_Tnl(
+      ir_basis<Scalar>::compute_Tnl(
           int n_min, int n_max,
           Eigen::Tensor<std::complex<double>, 2> &Tnl
       ) const {
@@ -274,6 +273,5 @@ namespace alps {
       }
 
 
-    }//namesapace ir
   }//namespace gf_extension
 }//namespace alps

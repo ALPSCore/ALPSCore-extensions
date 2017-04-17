@@ -11,12 +11,11 @@
 #include <boost/shared_ptr.hpp>
 
 #include <alps/gf/mesh.hpp>
-#include <alps/gf_extension/converter.hpp>
+#include <alps/gf_extension/transformer.hpp>
 
 
 namespace alps {
 namespace gf_extension {
-namespace ir {
 
   /***
    * Construct a piecewise polynomial by means of cubic spline
@@ -112,7 +111,7 @@ namespace ir {
  * @tparam Kernel kernel type
  */
   template<typename Scalar>
-  class basis {
+  class ir_basis {
    public:
     /**
      * Constructor
@@ -121,7 +120,7 @@ namespace ir {
      * @param cutoff  we drop basis functions corresponding to small singular values  |s_l/s_0~ < cutoff.
      * @param N       dimension of matrices for SVD. 500 may be big enough al least up to Lambda = 10^4.
      */
-    basis(const kernel<Scalar>& knl, int max_dim, double cutoff = 1e-10, int N = 501);
+    ir_basis(const kernel<Scalar>& knl, int max_dim, double cutoff = 1e-10, int N = 501);
 
    private:
     typedef alps::gf::piecewise_polynomial<double> pp_type;
@@ -181,21 +180,20 @@ namespace ir {
   /**
    * Fermionic IR basis
    */
-  class fermionic_basis : public basis<double> {
+  class fermionic_ir_basis : public ir_basis<double> {
    public:
-    fermionic_basis(double Lambda, int max_dim, double cutoff = 1e-10, int N = 501)
-        : basis<double>(fermionic_kernel(Lambda), max_dim, cutoff, N) {}
+    fermionic_ir_basis(double Lambda, int max_dim, double cutoff = 1e-10, int N = 501)
+        : ir_basis<double>(fermionic_kernel(Lambda), max_dim, cutoff, N) {}
   };
 
   /**
    * Bosonic IR basis
    */
-  class bosonic_basis : public basis<double> {
+  class bosonic_ir_basis : public ir_basis<double> {
    public:
-    bosonic_basis(double Lambda, int max_dim, double cutoff = 1e-10, int N = 501)
-        : basis<double>(bosonic_kernel(Lambda), max_dim, cutoff, N) {}
+    bosonic_ir_basis(double Lambda, int max_dim, double cutoff = 1e-10, int N = 501)
+        : ir_basis<double>(bosonic_kernel(Lambda), max_dim, cutoff, N) {}
   };
 
-}
 }
 }
