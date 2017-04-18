@@ -37,21 +37,23 @@ namespace gf_extension {
       std::copy(tensor_tmp.data(), tensor_tmp.data() + tensor_tmp.size(), marray.origin());
     }
 
-    template<typename S1, typename S2, unsigned long N>
-    void copy_to_tensor(const boost::multi_array<S1,N>& marray, Eigen::Tensor<S2,N>& tensor) {
+    template<typename S1, typename S2, std::size_t N1, int N2>
+    void copy_to_tensor(const boost::multi_array<S1,N1>& marray, Eigen::Tensor<S2,N2>& tensor) {
+
+      static_assert(N1 == N2, "Imcompatible dimensions");
 
       assert(marray.num_elements() == tensor.size());
 
-      Eigen::Tensor<S2,N,Eigen::RowMajor> tensor_tmp(tensor.dimensions());
+      Eigen::Tensor<S2,N2,Eigen::RowMajor> tensor_tmp(tensor.dimensions());
 
       std::copy(marray.origin(), marray.origin()+marray.num_elements(), tensor_tmp.data());
 
-      Eigen::Tensor<S2,N> tensor_tmp2 = tensor_tmp.swap_layout();
+      Eigen::Tensor<S2,N2> tensor_tmp2 = tensor_tmp.swap_layout();
 
       // Swap back dimensions
-      std::array<int,N> shuffle;
-      for (int i=0; i<N; ++i) {
-        shuffle[i] = N - 1 - i;
+      std::array<int,N1> shuffle;
+      for (int i=0; i<N1; ++i) {
+        shuffle[i] = N1 - 1 - i;
       }
 
       tensor = tensor_tmp2.shuffle(shuffle);
