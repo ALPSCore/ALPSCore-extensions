@@ -160,6 +160,13 @@ namespace gf_extension {
     }
 
     /**
+     * Construct a mesh
+     */
+    alps::gf::numerical_mesh<double> construct_mesh(double beta) const {
+      return alps::gf::numerical_mesh<double>{beta, all(), get_statistics()};
+    }
+
+    /**
      * Compute transformation matrix to Matsubara freq.
      * The computation may take some time. You may store the result somewhere and do not call this routine frequenctly.
      * @param n_min min Matsubara freq. index
