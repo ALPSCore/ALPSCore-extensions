@@ -5,9 +5,9 @@
 #include <boost/math/special_functions/bessel.hpp>
 #include <boost/multi_array.hpp>
 
-//#include <boost/timer/timer.hpp>
-//#include <time.h>
+#include "../include/alps/gf_extension/piecewise_polynomial.hpp"
 
+#include <boost/math/special_functions/factorials.hpp>
 
 void compute_Tnl_legendre(int n_matsubara, int n_legendre, boost::multi_array<std::complex<double>,2> &Tnl) {
   double sign_tmp = 1.0;
@@ -22,3 +22,12 @@ void compute_Tnl_legendre(int n_matsubara, int n_legendre, boost::multi_array<st
   }
 }
 
+template<alps::gf::statistics::statistics_type s>
+struct basis_type {
+  typedef alps::gf_extension::fermionic_ir_basis type;
+};
+
+template<>
+struct basis_type<alps::gf::statistics::BOSONIC> {
+  typedef alps::gf_extension::bosonic_ir_basis type;
+};

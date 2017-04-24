@@ -77,6 +77,85 @@ TEST(PiecewisePolynomial, Orthogonalization) {
     EXPECT_NEAR(nfunctions[1].compute_value(x) * std::sqrt(2.0/3.0), x, 1E-8);
 }
 
+
+TEST(PiecewisePolynomial, Multiply) {
+  typedef alps::gf::piecewise_polynomial<double> pp_type;
+
+  const int n_section = 10;
+  const int nptr = n_section + 1;
+  const int n = 4, m = 3;
+
+  std::vector<double> y(nptr), y2(nptr);
+  auto x = alps::gf_extension::linspace(-1.0, 2.0, nptr);
+  for (int i = 0; i < nptr; ++i) {
+    y[i] = std::pow(x[i], n);
+    y2[i] = std::pow(x[i], m);
+  }
+  auto p1 = alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y);
+  auto p2 = alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y2);
+
+  auto p_prod = alps::gf_extension::multiply(p1, p2);
+
+  for (int i = 0; i < nptr; ++i) {
+    ASSERT_NEAR(p1.compute_value(x[i])*p2.compute_value(x[i]), p_prod.compute_value(x[i]), 1e-10);
+  }
+}
+
+TEST(PiecewisePolynomial, Integral) {
+  typedef alps::gf::piecewise_polynomial<double> pp_type;
+
+  const int n_section = 2000;
+  const int nptr = n_section + 1;
+  const int n = 4;
+  const double xmin = -2.0, xmax = 1.0;
+
+  std::vector<double> y(nptr);
+  auto x = alps::gf_extension::linspace(xmin, xmax, nptr);
+  for (int i = 0; i < nptr; ++i) {
+    y[i] = std::pow(x[i], n);
+  }
+  auto p = alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y);
+
+  ASSERT_NEAR(
+      alps::gf_extension::integrate(p),
+      (std::pow(xmax,n+1)-std::pow(xmin,n+1))/(n+1),
+      1e-8
+  );
+}
+
+/*
+TEST(PiecewisePolynomial, IntegralWithExp) {
+  typedef alps::gf::piecewise_polynomial<double> pp_type;
+
+  const int n_section = 2000;
+  const int nptr = n_section + 1;
+  const int n = 0;
+  const double xmin = -1.0, xmax = 1.0;
+
+  std::vector<double> y(nptr);
+  auto x = alps::gf_extension::linspace(xmin, xmax, nptr);
+  for (int i = 0; i < nptr; ++i) {
+    y[i] = std::pow(x[i], n);
+    //std::cout << "debug_xy " << x[i] << " " << y[i] << std::endl;
+  }
+  std::vector<pp_type> p {{alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y)}};
+
+  std::vector<double> w;
+  w.push_back(0.5*M_PI);
+
+  Eigen::Tensor<std::complex<double>,2> results;
+  alps::gf_extension::compute_integral_with_exp(w, p, results);
+
+  std::cout << results(0,0) << std::endl;
+
+  //ASSERT_NEAR(
+      //alps::gf_extension::integrate(p),
+      //(std::pow(xmax,n+1)-std::pow(xmin,n+1))/(n+1),
+      //1e-8
+  //);
+}
+ */
+
 template<class T>
 class HighTTest : public testing::Test {
 };
@@ -85,7 +164,7 @@ typedef ::testing::Types<alps::gf_extension::fermionic_ir_basis, alps::gf_extens
 
 TYPED_TEST_CASE(HighTTest, BasisTypes);
 
-TYPED_TEST(HighTTest, BsisTypes) {
+TYPED_TEST(HighTTest, BasisTypes) {
   try {
     //construct ir basis
     const double Lambda = 0.01;//high T
@@ -182,12 +261,20 @@ TEST(IrBasis, DiscretizationError) {
   }
 }
 
+template<class T>
+class InsulatingGtau : public testing::Test {
+};
 
-TEST(IrBasis, FermionInsulatingGtau) {
+TYPED_TEST_CASE(InsulatingGtau, BasisTypes);
+
+// Delta peaks at omega=+/- 1
+TYPED_TEST(InsulatingGtau, BasisTypes) {
   try {
     const double Lambda = 300.0, beta = 100.0;
     const int max_dim = 100;
-    alps::gf_extension::fermionic_ir_basis basis(Lambda, max_dim, 1e-10, 501);
+    //typedef basis_type<alps::gf::statistics::FERMIONIC>::type basis_t;
+    //alps::gf_extension::fermionic_ir_basis basis(Lambda, max_dim, 1e-10, 501);
+    TypeParam basis(Lambda, max_dim, 1e-10, 501);
     ASSERT_TRUE(basis.dim()>0);
 
     typedef alps::gf::piecewise_polynomial<double> pp_type;
@@ -196,7 +283,11 @@ TEST(IrBasis, FermionInsulatingGtau) {
     std::vector<double> x(nptr), y(nptr);
     for (int i = 0; i < nptr; ++i) {
       x[i] = basis(0).section_edge(i);
-      y[i] = std::exp(-0.5*beta)*std::cosh(-0.5*beta*x[i]);
+      if (basis.get_statistics()==alps::gf::statistics::FERMIONIC) {
+        y[i] = std::exp(-0.5*beta)*std::cosh(-0.5*beta*x[i]);
+      } else {
+        y[i] = std::exp(-0.5*beta)*std::sinh(-0.5*beta*x[i]);
+      }
     }
     pp_type gtau(alps::gf_extension::construct_piecewise_polynomial_cspline<double>(x, y));
 
@@ -234,8 +325,13 @@ TEST(IrBasis, FermionInsulatingGtau) {
 
     const std::complex<double> zi(0.0, 1.0);
     for (int n = 0; n < n_iw; ++n) {
-      double wn = (2.*n+1)*M_PI/beta;
-      std::complex<double> z = - 0.5/(zi*wn - 1.0) - 0.5/(zi*wn + 1.0);
+      double wn;
+      if (basis.get_statistics()==alps::gf::statistics::FERMIONIC) {
+        wn = (2. * n + 1) * M_PI / beta;
+      } else {
+        wn = (2. * n ) * M_PI / beta;
+      }
+      std::complex<double> z = -0.5 / (zi * wn - 1.0) - 0.5 / (zi * wn + 1.0);
       ASSERT_NEAR(std::abs(z-coeff_iw(n)), 0.0, 1e-8);
     }
 
