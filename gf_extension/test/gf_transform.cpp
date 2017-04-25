@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 
+#include "spline.hpp"
+
 namespace g = alps::gf;
 namespace ge = alps::gf_extension;
 
@@ -133,6 +135,8 @@ TEST_F(GfTransformTest, IRtoMatsubara) {
     );
   }
 }
+
+
 
 /*
 TEST_F(GfTransformTest, MatsubaraToIR) {

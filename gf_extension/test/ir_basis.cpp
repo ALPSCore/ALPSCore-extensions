@@ -519,3 +519,145 @@ const int niw = 10000;
 }
 }
 */
+
+
+
+TEST(G2, wtensor) {
+  using dcomplex = std::complex<double>;
+
+  double Lambda = 1E+2;
+  int max_dim_f = 5;
+  int max_dim_b = 5;
+  const int niw_sum = 10000;
+  const int niw = 10;
+
+  namespace ge = alps::gf_extension;
+
+  ge::fermionic_ir_basis basis_f(Lambda, max_dim_f);
+  ge::bosonic_ir_basis basis_b(Lambda, max_dim_b);
+  const int dim_f = basis_f.dim();
+  const int dim_b = basis_b.dim();
+
+  Eigen::Tensor<dcomplex,2> Tnl_f, Tnl_b;
+  basis_f.compute_Tnl(0, niw_sum, Tnl_f);
+  basis_b.compute_Tnl(0, niw_sum, Tnl_b);
+
+  auto Tnl_f_pn = to_Tnl_pn(Tnl_f, alps::gf::statistics::FERMIONIC);
+  auto Tnl_b_pn = to_Tnl_pn(Tnl_b, alps::gf::statistics::BOSONIC);
+
+  //tk::spline spline;
+  //spline.set_points(x_array, y_array);
+
+  //Compute w(l, l^prime, n) by summing one freq., which will suffer from truncation errors
+  Eigen::Tensor<dcomplex,3> w_tensor(niw, dim_b, dim_f);
+  auto back_to_range = [](int i) {return std::max(std::min(i, 2*niw_sum),0);};
+  for (int lp = 0; lp < dim_f; ++lp) {
+    for (int l = 0; l < dim_b; ++l) {
+      for (int n = 0; n < niw; ++n) {
+        const auto min_m = back_to_range(-n);
+        const auto max_m = back_to_range(2*niw_sum -n);
+        dcomplex tmp = 0.0;
+        for (int m = min_m; m < max_m; ++m) {
+          tmp += std::conj(Tnl_b_pn(m,l)) * Tnl_f_pn(m+n, lp);
+        }
+        w_tensor(n,l,lp) = tmp;
+      }
+    }
+  }
+
+  //Alternatively, use the tau formula, which will give more accurate results.
+  std::vector<double> n_vec;
+  for (int i=0; i < niw; ++i) {
+    n_vec.push_back(i);
+  }
+  auto w_tensor2 = ge::compute_w_tensor(n_vec, basis_f, basis_b);
+
+  //The two results should match approximately.
+  for (int lp=0; lp<dim_f; ++lp) {
+    for (int l=0; l<dim_b; ++l) {
+      for (int n=0; n<niw; ++n) {
+        ASSERT_NEAR(abs(w_tensor(n, l, lp)-w_tensor2(n, l, lp)), 0.0,  0.002);
+      }
+    }
+  }
+}
+
+class G2WTensorTest : public ::testing::TestWithParam<double> {
+};
+
+
+TEST_P(G2WTensorTest, Spline) {
+  using dcomplex = std::complex<double>;
+
+  double Lambda = GetParam();
+  int max_dim_f = 20;
+  int max_dim_b = 20;
+  double ratio = 1.02;
+  double ratio2 = std::pow(ratio, 0.511);
+
+  namespace ge = alps::gf_extension;
+
+  ge::fermionic_ir_basis basis_f(Lambda, max_dim_f);
+  ge::bosonic_ir_basis basis_b(Lambda, max_dim_b);
+  const int dim_f = basis_f.dim();
+  const int dim_b = basis_b.dim();
+  double max_n = 1E+10;
+
+  //mesh 1
+  std::vector<double> n_vec;
+  std::vector<double> n_vec_dense;
+  for (int i=0; i < 200; ++i) {
+    n_vec.push_back(1.*i);
+    n_vec_dense.push_back(1.*i);
+  }
+  while (n_vec.back() < max_n) {
+    //std::cout << long(n_vec.back()) << std::endl;
+    n_vec.push_back(long(n_vec.back()*ratio));
+  }
+  while (n_vec_dense.back() < max_n) {
+    //std::cout << long(n_vec_dense.back()) << std::endl;
+    n_vec_dense.push_back(long(n_vec_dense.back()*ratio2));
+  }
+
+  int n_mesh = n_vec.size();
+  int n_mesh_dense = n_vec_dense.size();
+
+  //std::cout << "n_vec" << n_vec.size() << std::endl;
+  //std::cout << "n_vec" << n_vec_dense.size() << std::endl;
+
+  auto w_tensor = ge::compute_w_tensor(n_vec, basis_f, basis_b);
+  auto w_tensor_dense = ge::compute_w_tensor(n_vec_dense, basis_f, basis_b);
+
+  std::vector<double> x_array(n_vec.size()-1);
+  std::vector<double> y_re_array(n_vec.size()-1);
+  std::vector<double> y_imag_array(n_vec.size()-1);
+  double max_diff = 0.0;
+  for (int lp = 0; lp < dim_f; ++lp) {
+    for (int l = 0; l < dim_b; ++l) {
+
+      for (int n = 0; n < n_vec.size()-1; ++n) {
+        x_array[n] = std::log(n_vec[n+1]);
+        y_re_array[n] = w_tensor(n+1, l, lp).real();
+        y_imag_array[n] = w_tensor(n+1, l, lp).imag();
+      }
+      tk::spline spline_re;
+      tk::spline spline_imag;
+      spline_re.set_points(x_array, y_re_array);
+      spline_imag.set_points(x_array, y_imag_array);
+
+      for (int n=1; n<n_mesh_dense; ++n) {
+        auto log_n = std::log(n_vec_dense[n]);
+        max_diff = std::max(max_diff, std::abs(
+            w_tensor_dense(n,l,lp) - dcomplex(spline_re(log_n), spline_imag(log_n))
+          )
+        );
+      }
+    }
+  }
+  //std::cout << "max_diff " << Lambda << " " << max_diff << std::endl;
+  ASSERT_NEAR(max_diff, 0.0, 1e-5);
+}
+
+INSTANTIATE_TEST_CASE_P(G2WTensorTestLambda,
+                        G2WTensorTest,
+                        ::testing::Values(10.0, 1000.0, 10000.0));

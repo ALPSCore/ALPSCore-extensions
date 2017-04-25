@@ -309,8 +309,6 @@ namespace gf_extension {
       }
     }
 
-
-    //Use Taylor expansion for exp(i w_n tau) for M_PI*(n+0.5)*dx < cutoff*M_PI
     //Use Taylor expansion for exp(i w_n tau) for w_n*dx < cutoff*M_PI
     const double cutoff = 0.1;
 
@@ -339,16 +337,12 @@ namespace gf_extension {
 
       //Use Taylor expansion for exp(i w_n tau) for w_n*dx < cutoff*M_PI
       const double w_max_cs = cutoff*M_PI/dx;
-      //const auto ptr = std::lower_bound(w.begin(), w.end(), w_max_cs);
-      //const int n_max_cs = std::min(n_max, static_cast<int>(std::distance(w.begin(), ptr)));
-      //assert(n_max_cs >=0 && n_max_cs <= n_max);
       int n_max_cs = -1;
       for (int i = 0; i < w.size(); ++i) {
         if (w[i] <= w_max_cs) {
           n_max_cs = i;
         }
       }
-      //std::cout << "debug " << s << " " << n_max_cs << std::endl;
 
       //Use Taylor expansion
       if (n_max_cs >= 0) {
@@ -366,8 +360,6 @@ namespace gf_extension {
 
         left_mid_matrix.block(0, 0, n_max_cs + 1, k + 1) =
             left_matrix.block(0, 0, n_max_cs + 1, k_iw + 1) * mid_matrix;
-        //std::cout << "debug " << s << " " << left_mid_matrix(0,0) << std::endl;
-        //std::cout << "debug " << s << " " << exp_coeffs[0][s][0].imag() << std::endl;
       }
 
       //Otherwise, compute the overlap exactly
@@ -425,7 +417,7 @@ namespace gf_extension {
       Eigen::Tensor<std::complex<double>,2> &Tnl
   ) {
     const int num_n = n_max - n_min + 1;
-    const int batch_size = 1000;
+    const int batch_size = 500;
     Tnl = Eigen::Tensor<std::complex<double>,2>(num_n, bf_src.size());
     Eigen::Tensor<std::complex<double>,2> Tnl_batch(batch_size, bf_src.size());
     //TODO: use MPI
@@ -441,6 +433,57 @@ namespace gf_extension {
         for (int n = n_min_batch; n <= n_max_batch; ++n) {
           Tnl(n-n_min, j) = Tnl_batch(n-n_min_batch, j);
         }
+      }
+    }
+  }
+
+  /**
+ * Compute a transformation matrix from a give orthogonal basis set to Matsubara freq.
+ * @tparam T  scalar type
+ * @param n indices of Matsubara frequqneices for which matrix elements will be computed (in strictly ascending order).
+ *          Non-integer numbers are allowed as an input.
+ *          The Matsubara basis functions look like exp(i PI * (n[i]+1/2)) for fermions, exp(i PI * n[i]) for bosons.
+ * @param bf_src orthogonal basis functions. They must be piecewise polynomials of the same order.
+ * @param Tnl  computed transformation matrix
+ */
+  template<class T>
+  void compute_transformation_matrix_to_matsubara(
+      const std::vector<double>& n,
+      alps::gf::statistics::statistics_type statis,
+      const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
+      Eigen::Tensor<std::complex<double>,2> &Tnl
+  ) {
+    typedef std::complex<double> dcomplex;
+    typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
+    typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+    typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
+
+    if (n.size() == 0) {
+      return;
+    }
+
+    for (int i=0; i < n.size()-1; ++i) {
+      if (n[i] > n[i+1]) {
+        throw std::runtime_error("n must be in strictly ascending order!");
+      }
+    }
+
+    std::vector<double> w;
+    if (statis == alps::gf::statistics::FERMIONIC) {
+      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) {return M_PI*(x+0.5);});
+    } else {
+      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) {return M_PI*x;});
+    }
+
+    compute_integral_with_exp(w, bf_src, Tnl);
+
+    std::vector<double> inv_norm(bf_src.size());
+    for (int l = 0; l < bf_src.size(); ++l) {
+      inv_norm[l] = 1. / std::sqrt(static_cast<double>(bf_src[l].overlap(bf_src[l])));
+    }
+    for (int n = 0; n < w.size(); ++n) {
+      for (int l = 0; l < bf_src.size(); ++l) {
+        Tnl(n,l) *= inv_norm[l] * std::sqrt(0.5);
       }
     }
   }
@@ -568,6 +611,9 @@ namespace gf_extension {
       }
     }
   };
+
+
+
 
   /***
    * Template class transformer. Convert a GF object to a GF object of a different type.

@@ -9,6 +9,8 @@
 
 #include <boost/math/special_functions/factorials.hpp>
 
+#include "spline.hpp"
+
 void compute_Tnl_legendre(int n_matsubara, int n_legendre, boost::multi_array<std::complex<double>,2> &Tnl) {
   double sign_tmp = 1.0;
   Tnl.resize(boost::extents[n_matsubara][n_legendre]);
@@ -31,3 +33,33 @@ template<>
 struct basis_type<alps::gf::statistics::BOSONIC> {
   typedef alps::gf_extension::bosonic_ir_basis type;
 };
+
+
+
+Eigen::Tensor<std::complex<double>,2>
+to_Tnl_pn(const Eigen::Tensor<std::complex<double>,2>& Tnl, alps::gf::statistics::statistics_type s) {
+  int niw = Tnl.dimension(0);
+  int nl = Tnl.dimension(1);
+  Eigen::Tensor<std::complex<double>,2> Tnl_pn(2*niw, nl);
+  Tnl_pn.setZero();
+  if (s==alps::gf::statistics::FERMIONIC) {
+    for (int l=0; l<nl; ++l) {
+      for (int n=0; n<niw; ++n) {
+        Tnl_pn(niw + n, l) = Tnl(n, l);
+        Tnl_pn(niw - 1 - n, l) = std::conj(Tnl(n, l));
+      }
+    }
+  } else if (s==alps::gf::statistics::BOSONIC) {
+    for (int l=0; l<nl; ++l) {
+      for (int n=0; n<niw; ++n) {
+        Tnl_pn(niw + n, l) = Tnl(n, l);
+      }
+      for (int n=1; n<niw; ++n) {
+        Tnl_pn(niw - n, l) = std::conj(Tnl(n, l));
+      }
+    }
+  } else {
+    throw std::runtime_error("Unknown statistics type");
+  }
+  return Tnl_pn;
+}

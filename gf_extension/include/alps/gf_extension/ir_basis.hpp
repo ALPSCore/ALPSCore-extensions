@@ -11,8 +11,8 @@
 #include <boost/shared_ptr.hpp>
 
 #include <alps/gf/mesh.hpp>
-#include <alps/gf_extension/transformer.hpp>
-
+#include "transformer.hpp"
+#include "piecewise_polynomial.hpp"
 
 namespace alps {
 namespace gf_extension {
@@ -201,6 +201,14 @@ namespace gf_extension {
     bosonic_ir_basis(double Lambda, int max_dim, double cutoff = 1e-10, int N = 501)
         : ir_basis<double>(bosonic_kernel(Lambda), max_dim, cutoff, N) {}
   };
+
+
+
+  Eigen::Tensor<std::complex<double>, 3>
+  compute_w_tensor(
+      const std::vector<double> &n_vec,
+      const fermionic_ir_basis &basis_f,
+      const bosonic_ir_basis &basis_b);
 
 }
 }
