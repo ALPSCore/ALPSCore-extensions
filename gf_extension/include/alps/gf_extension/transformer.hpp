@@ -211,7 +211,7 @@ namespace gf_extension {
  */
     template<class T>
     void compute_transformation_matrix_to_matsubara_impl(
-        int n_min, int n_max,
+        const std::vector<long>& n_vec,
         alps::gf::statistics::statistics_type statis,
         const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
         Eigen::Tensor<std::complex<double>,2> &Tnl
@@ -221,20 +221,30 @@ namespace gf_extension {
       typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
       typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
 
-      if (n_min < 0) {
-        throw std::invalid_argument("n_min cannot be negative.");
+      //if (n_min < 0) {
+        //throw std::invalid_argument("n_min cannot be negative.");
+      //}
+      //if (n_min > n_max) {
+        //throw std::invalid_argument("n_min cannot be larger than n_max.");
+      //}
+      for (int n=0; n<n_vec.size(); ++n) {
+        if (n_vec[n] < 0) {
+          throw std::runtime_error("n_vec cannot be negative.");
+        }
       }
-      if (n_min > n_max) {
-        throw std::invalid_argument("n_min cannot be larger than n_max.");
+      for (int n=0; n<n_vec.size()-1; ++n) {
+        if (n_vec[n] > n_vec[n+1]) {
+          throw std::runtime_error("n_vec must be in ascending order.");
+        }
       }
 
-      std::vector<double> w(n_max - n_min + 1);
+      std::vector<double> w(n_vec.size());
 
-      for (int n = n_min; n <= n_max; ++n) {
+      for (int n = 0; n < n_vec.size(); ++n) {
         if (statis == alps::gf::statistics::FERMIONIC) {
-          w[n-n_min] = (n + 0.5) * M_PI;
+          w[n] = (n_vec[n] + 0.5) * M_PI;
         } else if (statis == alps::gf::statistics::BOSONIC) {
-          w[n-n_min] = n * M_PI;
+          w[n] = n_vec[n] * M_PI;
         }
       }
 
@@ -428,7 +438,11 @@ namespace gf_extension {
       if (n_max_batch - n_min_batch <= 0) {
         continue;
       }
-      detail::compute_transformation_matrix_to_matsubara_impl(n_min_batch, n_max_batch, statis, bf_src, Tnl_batch);
+      std::vector<long> n_vec;
+      for (int n=n_min_batch; n<=n_max_batch; ++n) {
+        n_vec.push_back(n);
+      }
+      detail::compute_transformation_matrix_to_matsubara_impl(n_vec, statis, bf_src, Tnl_batch);
       for (int j = 0; j < bf_src.size(); ++j) {
         for (int n = n_min_batch; n <= n_max_batch; ++n) {
           Tnl(n-n_min, j) = Tnl_batch(n-n_min_batch, j);
@@ -441,14 +455,13 @@ namespace gf_extension {
  * Compute a transformation matrix from a give orthogonal basis set to Matsubara freq.
  * @tparam T  scalar type
  * @param n indices of Matsubara frequqneices for which matrix elements will be computed (in strictly ascending order).
- *          Non-integer numbers are allowed as an input.
  *          The Matsubara basis functions look like exp(i PI * (n[i]+1/2)) for fermions, exp(i PI * n[i]) for bosons.
  * @param bf_src orthogonal basis functions. They must be piecewise polynomials of the same order.
  * @param Tnl  computed transformation matrix
  */
   template<class T>
   void compute_transformation_matrix_to_matsubara(
-      const std::vector<double>& n,
+      const std::vector<long>& n,
       alps::gf::statistics::statistics_type statis,
       const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
       Eigen::Tensor<std::complex<double>,2> &Tnl

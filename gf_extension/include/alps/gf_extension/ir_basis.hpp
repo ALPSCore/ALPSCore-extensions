@@ -190,6 +190,16 @@ namespace gf_extension {
         int n_min, int n_max,
         Eigen::Tensor<std::complex<double>, 2> &Tnl
     ) const;
+
+    void compute_Tnl(
+        const std::vector<long>& n_vec,
+        Eigen::Tensor<std::complex<double>, 2> &Tnl
+    ) const {
+      alps::gf_extension::compute_transformation_matrix_to_matsubara<double>(n_vec,
+                                                                             p_knl_->get_statistics(),
+                                                                             basis_functions_,
+                                                                             Tnl);
+    }
   };
 
 #ifdef SWIG
@@ -218,9 +228,18 @@ namespace gf_extension {
 
   Eigen::Tensor<std::complex<double>, 3>
   compute_w_tensor(
-      const std::vector<double> &n_vec,
+      const std::vector<long> &n_vec,
       const fermionic_ir_basis &basis_f,
       const bosonic_ir_basis &basis_b);
+
+  void
+  compute_C_tensor(
+      const fermionic_ir_basis &basis_f,
+      const bosonic_ir_basis &basis_b,
+      Eigen::Tensor<double,6>& C_tensor,
+      double ratio_sum=1.01,
+      int max_n_exact_sum=10000
+  );
 
 }
 }
