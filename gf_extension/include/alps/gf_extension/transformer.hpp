@@ -18,6 +18,13 @@ namespace gf_extension {
     typedef double value;
   };
 
+  template<class T>
+  void compute_integral_with_exp(
+      const std::vector<double>& w,
+      const std::vector <alps::gf::piecewise_polynomial<T>> &pp_func,
+      Eigen::Tensor<std::complex<double>,2> &Tnl
+  );
+
   namespace detail {
     template<typename S1, typename S2, unsigned long N>
     void copy_from_tensor(const Eigen::Tensor<S1,N>& tensor, boost::multi_array<S2,N>& marray) {
@@ -63,6 +70,7 @@ namespace gf_extension {
     /// For fermionic cases, w_n = (2*n+1)*pi/beta.
     /// For bosonci cases, w_n = (2*n)*pi/beta.
     /// Caution: when n is large, you need a very dense mesh. You are resposible for this.
+    /*
     template<class T>
     void construct_matsubra_basis_functions(
         int n_min, int n_max,
@@ -110,10 +118,141 @@ namespace gf_extension {
         results.push_back(pp_type(N, section_edges, coeffs));
       }
     }
-  }//namespace detail
+    */
 
-  //class Polynomial {
-  //};
+    /// Construct piecewise polynomials representing Matsubara basis functions: exp(-i w_n tau) for n >= 0.
+    /// For fermionic cases, w_n = (2*n+1)*pi/beta.
+    /// For bosonci cases, w_n = (2*n)*pi/beta.
+    /// Caution: when n is large, you need a very dense mesh. You are resposible for this.
+    template<class T>
+    void construct_matsubra_basis_functions_coeff(
+        int n_min, int n_max,
+        alps::gf::statistics::statistics_type s,
+        const std::vector<double> &section_edges,
+        int k,
+        boost::multi_array<std::complex<T>,3> &coeffs) {
+
+      if (n_min < 0) {
+        throw std::invalid_argument("n_min cannot be negative.");
+      }
+      if (n_min > n_max) {
+        throw std::invalid_argument("n_min cannot be larger than n_max.");
+      }
+
+      const int N = section_edges.size() - 1;
+
+      std::complex<double> z;
+      coeffs.resize(boost::extents[n_max-n_min+1][N][k + 1]);
+
+      std::vector<double> pre_factor(k + 1);
+      pre_factor[0] = 1.0;
+      for (int j = 1; j < k + 1; ++j) {
+        pre_factor[j] = pre_factor[j - 1] / j;
+      }
+
+      for (int n = n_min; n <= n_max; ++n) {
+        if (s == alps::gf::statistics::FERMIONIC) {
+          z = -std::complex<double>(0.0, n + 0.5) * M_PI;
+        } else if (s == alps::gf::statistics::BOSONIC) {
+          z = -std::complex<double>(0.0, n) * M_PI;
+        }
+        for (int section = 0; section < N; ++section) {
+          const double x = section_edges[section];
+          std::complex<T> exp0 = std::exp(z * (x + 1));
+          std::complex<T> z_power = 1.0;
+          for (int j = 0; j < k + 1; ++j) {
+            coeffs[n-n_min][section][j] = exp0 * z_power * pre_factor[j];
+            z_power *= z;
+          }
+        }
+      }
+    }
+
+    /// Construct piecewise polynomials representing exponential functions: exp(i w_i x)
+    template<class T>
+    void construct_exp_functions_coeff(
+        const std::vector<double>& w,
+        const std::vector<double> &section_edges,
+        int k,
+        boost::multi_array<std::complex<T>,3> &coeffs) {
+      const int N = section_edges.size() - 1;
+
+      std::complex<double> z;
+      coeffs.resize(boost::extents[w.size()][N][k + 1]);
+
+      std::vector<double> pre_factor(k + 1);
+      pre_factor[0] = 1.0;
+      for (int j = 1; j < k + 1; ++j) {
+        pre_factor[j] = pre_factor[j - 1] / j;
+      }
+
+      for (int n = 0; n < w.size(); ++n) {
+        auto z = std::complex<double>(0.0, w[n]);
+        for (int section = 0; section < N; ++section) {
+          const double x = section_edges[section];
+          std::complex<T> exp0 = std::exp(z * (x + 1));
+          std::complex<T> z_power = 1.0;
+          for (int j = 0; j < k + 1; ++j) {
+            coeffs[n][section][j] = exp0 * z_power * pre_factor[j];
+            z_power *= z;
+          }
+        }
+      }
+    }
+
+/**
+ * Compute a transformation matrix from a give orthogonal basis set to Matsubara freq.
+ * @tparam T  scalar type
+ * @param n_min min index of Matsubara freq. index (>=0)
+ * @param n_max max index of Matsubara freq. index (>=0)
+ * @param statis Statistics (fermion or boson)
+ * @param bf_src orthogonal basis functions. They must be piecewise polynomials of the same order.
+ * @param Tnl  computed transformation matrix
+ */
+    template<class T>
+    void compute_transformation_matrix_to_matsubara_impl(
+        int n_min, int n_max,
+        alps::gf::statistics::statistics_type statis,
+        const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
+        Eigen::Tensor<std::complex<double>,2> &Tnl
+    ) {
+      typedef std::complex<double> dcomplex;
+      typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
+      typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+      typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
+
+      if (n_min < 0) {
+        throw std::invalid_argument("n_min cannot be negative.");
+      }
+      if (n_min > n_max) {
+        throw std::invalid_argument("n_min cannot be larger than n_max.");
+      }
+
+      std::vector<double> w(n_max - n_min + 1);
+
+      for (int n = n_min; n <= n_max; ++n) {
+        if (statis == alps::gf::statistics::FERMIONIC) {
+          w[n-n_min] = (n + 0.5) * M_PI;
+        } else if (statis == alps::gf::statistics::BOSONIC) {
+          w[n-n_min] = n * M_PI;
+        }
+      }
+
+      compute_integral_with_exp(w, bf_src, Tnl);
+
+      std::vector<double> inv_norm(bf_src.size());
+      for (int l = 0; l < bf_src.size(); ++l) {
+        inv_norm[l] = 1. / std::sqrt(static_cast<double>(bf_src[l].overlap(bf_src[l])));
+      }
+      for (int n = 0; n < w.size(); ++n) {
+        for (int l = 0; l < bf_src.size(); ++l) {
+          Tnl(n,l) *= inv_norm[l] * std::sqrt(0.5);
+        }
+      }
+    }
+
+
+  }//namespace detail
 
   template<typename T>
   std::vector<T> linspace(T minval, T maxval, int N) {
@@ -125,48 +264,141 @@ namespace gf_extension {
   }
 
 /**
- * Integrate x^n * piecewise polynomials
- * Returns \int dx x^n f(x).
- * The interval of the integral is equal to the interval of the polynomial f(x).
- * @tparam T  scalar type
- * @param n power of x^n (n>=0)
- * @param poly pieacese pylynomial
+ * Compute integral of exponential functions and given piecewise polynomials
+ *           \int_{-1}^1 dx exp(i w_i (x+1)) p_j(x),
+ *           where w_i are given real double objects and p_j are piecewise polynomials.
+ *           The p_j(x) must be defined in the interval [-1,1].
+ * @tparam T  scalar type of piecewise polynomials
+ * @param w vector of w_i in ascending order
+ * @param statis Statistics (fermion or boson)
+ * @param p vector of piecewise polynomials
+ * @param results  computed results
  */
-/*
   template<class T>
-  T integrate_with_power(
-      int n,
-      const alps::gf::piecewise_polynomial<T> &poly
+  void compute_integral_with_exp(
+      const std::vector<double>& w,
+      const std::vector <alps::gf::piecewise_polynomial<T>> &pp_func,
+      Eigen::Tensor<std::complex<double>,2> &Tnl
   ) {
-    typedef alps::gf::piecewise_polynomial<T> pp_type;
-    typedef Eigen::Matrix <T, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+    typedef std::complex<double> dcomplex;
+    typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
+    typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
     typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
 
-    const int k = poly.order();
+    //order of polynomials used for representing exponential functions internally.
+    const int k_iw = 8;
+    const int k = pp_func[0].order();
+    const int n_section = pp_func[0].num_sections();
 
-    if (n < 0) {
-      throw std::invalid_argument("n < 0");
+    for (int l = 0; l < pp_func.size(); ++l) {
+      if (k != pp_func[l].order()) {
+        throw std::runtime_error(
+            "Error in compute_transformation_matrix_to_matsubara: basis functions must be pieacewise polynomials of the same order");
+      }
+      if (pp_func[l].section_edge(0) != -1 || pp_func[l].section_edge(n_section) != 1) {
+        throw std::runtime_error("Piecewise polynomials must be defined on [-1,1]");
+      }
     }
 
-    T r = 0.0;
-    for (int s = 0; s < poly.num_sections(); ++s) {
-      const double x0 = poly.section_edge(s);
-      const double x1 = poly.section_edge(s + 1);
-      const double dx = x1 - x0;
+    const int n_iw = w.size();
+    const int n_max = n_iw - 1;
 
-      T rtmp = 0.0;
-      double dx_power = std::pow(dx, n+1);
-      for (int p = 0; p < k; ++p) {
-        rtmp += poly.coefficient(s,p) * dx_power /(p+n+1);
-        dx_power *= dx;
+    for (int i=0; i<w.size()-1; ++i) {
+      if (w[i] > w[i+1]) {
+        throw std::runtime_error("w must be give in ascending order.");
+      }
+    }
+
+    //Use Taylor expansion for exp(i w_n tau) for w_n*dx < cutoff*M_PI
+    const double cutoff = 0.1;
+
+    boost::multi_array<std::complex<double>,3> exp_coeffs(boost::extents[w.size()][n_section][k_iw+1]);
+    detail::construct_exp_functions_coeff(w, pp_func[0].section_edges(), k_iw, exp_coeffs);
+
+    matrix_t left_mid_matrix(n_iw, k + 1);
+    matrix_t left_matrix(n_iw, k_iw + 1);
+    matrix_t mid_matrix(k_iw + 1, k + 1);
+    matrix_t right_matrix(k + 1, pp_func.size());
+    matrix_t r(n_iw, pp_func.size());
+    r.setZero();
+
+    std::vector<double> dx_power(k + k_iw + 2);
+
+    for (int s = 0; s < n_section; ++s) {
+      double x0 = pp_func[0].section_edge(s);
+      double x1 = pp_func[0].section_edge(s + 1);
+      double dx = x1 - x0;
+      left_mid_matrix.setZero();
+
+      dx_power[0] = 1.0;
+      for (int p = 1; p < dx_power.size(); ++p) {
+        dx_power[p] = dx * dx_power[p - 1];
       }
 
-      r += rtmp;
+      //Use Taylor expansion for exp(i w_n tau) for w_n*dx < cutoff*M_PI
+      const double w_max_cs = cutoff*M_PI/dx;
+      int n_max_cs = -1;
+      for (int i = 0; i < w.size(); ++i) {
+        if (w[i] <= w_max_cs) {
+          n_max_cs = i;
+        }
+      }
+
+      //Use Taylor expansion
+      if (n_max_cs >= 0) {
+        for (int p = 0; p < k_iw + 1; ++p) {
+          for (int p2 = 0; p2 < k + 1; ++p2) {
+            mid_matrix(p, p2) = dx_power[p + p2 + 1] / (p + p2 + 1.0);
+          }
+        }
+
+        for (int n = 0; n < n_max_cs + 1; ++n) {
+          for (int p = 0; p < k_iw + 1; ++p) {
+            left_matrix(n, p) = exp_coeffs[n][s][p];
+          }
+        }
+
+        left_mid_matrix.block(0, 0, n_max_cs + 1, k + 1) =
+            left_matrix.block(0, 0, n_max_cs + 1, k_iw + 1) * mid_matrix;
+      }
+
+      //Otherwise, compute the overlap exactly
+      for (int n = std::max(n_max_cs + 1, 0); n <= n_max; ++n) {
+        std::complex<double> z = std::complex<double>(0.0, w[n]);
+
+        dcomplex dx_z = dx * z;
+        dcomplex dx_z2 = dx_z * dx_z;
+        dcomplex dx_z3 = dx_z2 * dx_z;
+        dcomplex inv_z = 1.0 / z;
+        dcomplex inv_z2 = inv_z * inv_z;
+        dcomplex inv_z3 = inv_z2 * inv_z;
+        dcomplex inv_z4 = inv_z3 * inv_z;
+        dcomplex exp = std::exp(dx * z);
+        dcomplex exp0 = std::exp((x0 + 1.0) * z);
+
+        left_mid_matrix(n, 0) = (-1.0 + exp) * inv_z * exp0;
+        left_mid_matrix(n, 1) = ((dx_z - 1.0) * exp + 1.0) * inv_z2 * exp0;
+        left_mid_matrix(n, 2) = ((dx_z2 - 2.0 * dx_z + 2.0) * exp - 2.0) * inv_z3 * exp0;
+        left_mid_matrix(n, 3) = ((dx_z3 - 3.0 * dx_z2 + 6.0 * dx_z - 6.0) * exp + 6.0) * inv_z4 * exp0;
+      }
+
+      for (int l = 0; l < pp_func.size(); ++l) {
+        for (int p2 = 0; p2 < k + 1; ++p2) {
+          right_matrix(p2, l) = pp_func[l].coefficient(s, p2);
+        }
+      }
+
+      r += left_mid_matrix * right_matrix;
     }
 
-    return r;
+    Tnl = tensor_t(n_iw, pp_func.size());
+    for (int n = 0; n < n_iw; ++n) {
+      for (int l = 0; l < pp_func.size(); ++l) {
+        Tnl(n,l) = r(n, l);
+      }
+    }
   }
-  */
+
 
 /**
  * Compute a transformation matrix from a give orthogonal basis set to Matsubara freq.
@@ -184,121 +416,78 @@ namespace gf_extension {
       const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
       Eigen::Tensor<std::complex<double>,2> &Tnl
   ) {
+    const int num_n = n_max - n_min + 1;
+    const int batch_size = 500;
+    Tnl = Eigen::Tensor<std::complex<double>,2>(num_n, bf_src.size());
+    Eigen::Tensor<std::complex<double>,2> Tnl_batch(batch_size, bf_src.size());
+    //TODO: use MPI
+    //Split into batches to avoid using too much memory
+    for (int ib = 0; ib < num_n/batch_size+1; ++ib) {
+      int n_min_batch = batch_size * ib;
+      int n_max_batch = std::min(batch_size * (ib+1) - 1, n_max);
+      if (n_max_batch - n_min_batch <= 0) {
+        continue;
+      }
+      detail::compute_transformation_matrix_to_matsubara_impl(n_min_batch, n_max_batch, statis, bf_src, Tnl_batch);
+      for (int j = 0; j < bf_src.size(); ++j) {
+        for (int n = n_min_batch; n <= n_max_batch; ++n) {
+          Tnl(n-n_min, j) = Tnl_batch(n-n_min_batch, j);
+        }
+      }
+    }
+  }
+
+  /**
+ * Compute a transformation matrix from a give orthogonal basis set to Matsubara freq.
+ * @tparam T  scalar type
+ * @param n indices of Matsubara frequqneices for which matrix elements will be computed (in strictly ascending order).
+ *          Non-integer numbers are allowed as an input.
+ *          The Matsubara basis functions look like exp(i PI * (n[i]+1/2)) for fermions, exp(i PI * n[i]) for bosons.
+ * @param bf_src orthogonal basis functions. They must be piecewise polynomials of the same order.
+ * @param Tnl  computed transformation matrix
+ */
+  template<class T>
+  void compute_transformation_matrix_to_matsubara(
+      const std::vector<double>& n,
+      alps::gf::statistics::statistics_type statis,
+      const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
+      Eigen::Tensor<std::complex<double>,2> &Tnl
+  ) {
     typedef std::complex<double> dcomplex;
     typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
     typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
     typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
 
-    if (n_min < 0) {
-      throw std::invalid_argument("n_min cannot be negative.");
-    }
-    if (n_min > n_max) {
-      throw std::invalid_argument("n_min cannot be larger than n_max.");
+    if (n.size() == 0) {
+      return;
     }
 
-    //order of polynomials used for representing Matsubara basis functions internally.
-    const int k_iw = 16;
-
-    const int k = bf_src[0].order();
-
-    for (int l = 0; l < bf_src.size(); ++l) {
-      if (k != bf_src[l].order()) {
-        throw std::runtime_error(
-            "Error in compute_transformation_matrix_to_matsubara: basis functions must be pieacewise polynomials of the same order");
+    for (int i=0; i < n.size()-1; ++i) {
+      if (n[i] > n[i+1]) {
+        throw std::runtime_error("n must be in strictly ascending order!");
       }
     }
 
-    std::vector <pp_type> matsubara_functions;
-
-    detail::construct_matsubra_basis_functions(n_min, n_max, statis, bf_src[0].section_edges(), k_iw, matsubara_functions);
-
-    const int n_section = bf_src[0].num_sections();
-    const int n_iw = n_max - n_min + 1;
-
-    matrix_t left_mid_matrix(n_iw, k + 1);
-    matrix_t left_matrix(n_iw, k_iw + 1);
-    matrix_t mid_matrix(k_iw + 1, k + 1);
-    matrix_t right_matrix(k + 1, bf_src.size());
-    matrix_t r(n_iw, bf_src.size());
-    r.setZero();
-
-    std::vector<double> dx_power(k + k_iw + 2);
-
-    const double cutoff = 0.1;
-    for (int s = 0; s < n_section; ++s) {
-      double x0 = bf_src[0].section_edge(s);
-      double x1 = bf_src[0].section_edge(s + 1);
-      double dx = x1 - x0;
-
-      dx_power[0] = 1.0;
-      for (int p = 1; p < dx_power.size(); ++p) {
-        dx_power[p] = dx * dx_power[p - 1];
-      }
-
-      //Use Taylor expansion for exp(i w_n tau) for M_PI*(n+0.5)*dx < cutoff*M_PI
-      int n_max_cs = std::max(std::min(static_cast<int>(cutoff / dx - 0.5), n_max), 0);
-
-      for (int p = 0; p < k_iw + 1; ++p) {
-        for (int p2 = 0; p2 < k + 1; ++p2) {
-          mid_matrix(p, p2) = dx_power[p + p2 + 1] / (p + p2 + 1.0);
-        }
-      }
-
-      for (int n = 0; n < n_max_cs - n_min + 1; ++n) {
-        for (int p = 0; p < k_iw + 1; ++p) {
-          left_matrix(n, p) = alps::gf::detail::conjg(matsubara_functions[n].coefficient(s, p));
-        }
-      }
-
-      left_mid_matrix.block(0, 0, n_max_cs - n_min + 1, k + 1) =
-          left_matrix.block(0, 0, n_max_cs - n_min + 1, k_iw + 1) * mid_matrix;
-
-      //Compute the overlap exactly for M_PI*(n+0.5)*dx > cutoff*M_PI
-      for (int n = n_max_cs + 1; n <= n_max; ++n) {
-        std::complex<double> z;
-        if (statis == alps::gf::statistics::FERMIONIC) {
-          z = std::complex<double>(0.0, n + 0.5) * M_PI;
-        } else if (statis == alps::gf::statistics::BOSONIC) {
-          z = std::complex<double>(0.0, n) * M_PI;
-        }
-
-        dcomplex dx_z = dx * z;
-        dcomplex dx_z2 = dx_z * dx_z;
-        dcomplex dx_z3 = dx_z2 * dx_z;
-        dcomplex inv_z = 1.0 / z;
-        dcomplex inv_z2 = inv_z * inv_z;
-        dcomplex inv_z3 = inv_z2 * inv_z;
-        dcomplex inv_z4 = inv_z3 * inv_z;
-        dcomplex exp = std::exp(dx * z);
-        dcomplex exp0 = std::exp((x0 + 1.0) * z);
-
-        left_mid_matrix(n - n_min, 0) = (-1.0 + exp) * inv_z * exp0;
-        left_mid_matrix(n - n_min, 1) = ((dx_z - 1.0) * exp + 1.0) * inv_z2 * exp0;
-        left_mid_matrix(n - n_min, 2) = ((dx_z2 - 2.0 * dx_z + 2.0) * exp - 2.0) * inv_z3 * exp0;
-        left_mid_matrix(n - n_min, 3) = ((dx_z3 - 3.0 * dx_z2 + 6.0 * dx_z - 6.0) * exp + 6.0) * inv_z4 * exp0;
-      }
-
-      for (int l = 0; l < bf_src.size(); ++l) {
-        for (int p2 = 0; p2 < k + 1; ++p2) {
-          right_matrix(p2, l) = bf_src[l].coefficient(s, p2);
-        }
-      }
-
-      r += left_mid_matrix * right_matrix;
+    std::vector<double> w;
+    if (statis == alps::gf::statistics::FERMIONIC) {
+      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) {return M_PI*(x+0.5);});
+    } else {
+      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) {return M_PI*x;});
     }
 
-    Tnl = tensor_t(n_iw, bf_src.size());
+    compute_integral_with_exp(w, bf_src, Tnl);
+
     std::vector<double> inv_norm(bf_src.size());
     for (int l = 0; l < bf_src.size(); ++l) {
       inv_norm[l] = 1. / std::sqrt(static_cast<double>(bf_src[l].overlap(bf_src[l])));
     }
-    for (int n = 0; n < n_iw; ++n) {
+    for (int n = 0; n < w.size(); ++n) {
       for (int l = 0; l < bf_src.size(); ++l) {
-        // 0.5 is the inverse of the norm of exp(i w_n tau)
-        Tnl(n,l) = r(n, l) * inv_norm[l] * std::sqrt(0.5);
+        Tnl(n,l) *= inv_norm[l] * std::sqrt(0.5);
       }
     }
   }
+
 
   /// Compute overlap <left | right> with complex conjugate
   template<class T1, class T2>
@@ -422,6 +611,9 @@ namespace gf_extension {
       }
     }
   };
+
+
+
 
   /***
    * Template class transformer. Convert a GF object to a GF object of a different type.

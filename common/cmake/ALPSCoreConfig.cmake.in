@@ -54,6 +54,8 @@ find_package_handle_standard_args(ALPSCore REQUIRED_VARS ALPSCore_LIBRARIES HAND
 # set(ALPSCore_INCLUDE_DIR  ${ALPSCore_INCLUDES} )
 # set(ALPSCore_INCLUDE_DIRS ${ALPSCore_INCLUDES} )
 # set(ALPSCore_LIBRARY      ${ALPSCore_LIBRARIES})
+set(ALPSCore_CXX_COMPILER_ID @CMAKE_CXX_COMPILER_ID@)
+set(ALPSCore_INSTALL_PREFIX @CMAKE_INSTALL_PREFIX@)
 
 # mark_as_advanced(
 #     ALPSCore_INCLUDES
@@ -62,3 +64,7 @@ find_package_handle_standard_args(ALPSCore REQUIRED_VARS ALPSCore_LIBRARIES HAND
 #     ALPSCore_LIBRARIES
 #     ALPSCore_LIBRARY
 #     )
+mark_as_advanced(
+    ALPSCore_CXX_COMPILER_ID
+    ALPSCore_INSTALL_PREFIX
+)
