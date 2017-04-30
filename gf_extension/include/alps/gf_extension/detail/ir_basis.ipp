@@ -188,7 +188,7 @@ namespace alps {
       ir_basis<Scalar>::ir_basis(const kernel<Scalar>& knl, int max_dim, double cutoff, int N) : p_knl_(knl.clone())
       {
         std::vector<double> even_svalues, odd_svalues, svalues;
-        std::vector<pp_type> even_basis_functions, odd_basis_functions;
+        std::vector<alps::gf::piecewise_polynomial<double> > even_basis_functions, odd_basis_functions;
 
         do_svd<Scalar>(*p_knl_, 1, N, cutoff, even_svalues, even_basis_functions);
         do_svd<Scalar>(*p_knl_, -1, N, cutoff, odd_svalues, odd_basis_functions);

@@ -33,6 +33,8 @@ namespace gf_extension {
   template<typename T>
   class kernel {
    public:
+    virtual ~kernel() {};
+
     /// return the value of the kernel for given x and y in the [-1,1] interval.
     virtual T operator()(double x, double y) const = 0;
 
@@ -43,12 +45,17 @@ namespace gf_extension {
     virtual boost::shared_ptr<kernel> clone() const = 0;
   };
 
+#ifdef SWIG
+%template(real_kernel) kernel<double>;
+#endif
+
   /**
    * Fermionic kernel
    */
   class fermionic_kernel : public kernel<double> {
    public:
     fermionic_kernel(double Lambda) : Lambda_(Lambda) {}
+    virtual ~fermionic_kernel() {};
 
     double operator()(double x, double y) const {
       const double limit = 100.0;
@@ -79,6 +86,7 @@ namespace gf_extension {
   class bosonic_kernel : public kernel<double> {
    public:
     bosonic_kernel(double Lambda) : Lambda_(Lambda) {}
+    virtual ~bosonic_kernel() {};
 
     double operator()(double x, double y) const {
       const double limit = 100.0;
@@ -123,10 +131,10 @@ namespace gf_extension {
     ir_basis(const kernel<Scalar>& knl, int max_dim, double cutoff = 1e-10, int N = 501);
 
    private:
-    typedef alps::gf::piecewise_polynomial<double> pp_type;
+    //typedef alps::gf::piecewise_polynomial<double> pp_type;
 
     boost::shared_ptr<kernel<Scalar> > p_knl_;
-    std::vector<pp_type> basis_functions_;
+    std::vector<alps::gf::piecewise_polynomial<double> > basis_functions_;
 
    public:
     /**
@@ -141,12 +149,12 @@ namespace gf_extension {
      * @param l l-th basis function
      * @return  reference to the l-th basis function
      */
-    const pp_type &operator()(int l) const { return basis_functions_[l]; }
+    const alps::gf::piecewise_polynomial<double> &operator()(int l) const { return basis_functions_[l]; }
 
     /**
      * Return a reference to all basis functions
      */
-    const std::vector<pp_type> all() const { return basis_functions_; }
+    const std::vector<alps::gf::piecewise_polynomial<double> > all() const { return basis_functions_; }
 
     /**
      * Return number of basis functions
@@ -176,6 +184,10 @@ namespace gf_extension {
         Eigen::Tensor<std::complex<double>, 2> &Tnl
     ) const;
   };
+
+#ifdef SWIG
+%template(real_ir_basis) ir_basis<double>;
+#endif
 
   /**
    * Fermionic IR basis
