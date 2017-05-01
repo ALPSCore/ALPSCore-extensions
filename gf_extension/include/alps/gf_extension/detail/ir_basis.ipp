@@ -67,7 +67,6 @@ namespace alps {
     template<typename T>
     alps::gf::piecewise_polynomial<T> construct_piecewise_polynomial_cspline(
         const std::vector<double> &x_array, const std::vector<double> &y_array) {
-
       const int n_points = x_array.size();
       const int n_section = n_points - 1;
 
@@ -342,31 +341,16 @@ namespace alps {
       const int dim_f = basis_f.dim();
       const int dim_b = basis_b.dim();
 
-      //Construct linear + log mesh for cubic spline interpolation
-      double ratio = 1.02;
+      //Construct a mesh
       double max_n = 1E+10;
       std::vector<long> n_vec;
-      for (int i=0; i < 200; ++i) {
-        n_vec.push_back(i);
-      }
-      while (n_vec.back() < max_n) {
-        n_vec.push_back(long(n_vec.back()*ratio));
-      }
-      int n_mesh = n_vec.size();
-
-      //Compute w tensor
-      auto w_tensor = ge::compute_w_tensor(n_vec, basis_f, basis_b);
-
-      auto n_to_x = [](long n){return std::log(n+1);};
-
-      //Compute C tensor
-      //summation on a dense log mesh
-      std::vector<double> x_sum, weight_sum;
+      std::vector<double> weight_sum;
       {
         long n_start = 0, dn = 1;
         double tmp = 0.0;
         while(n_start < max_n) {
-          x_sum.push_back(0.5*(n_to_x(n_start) + n_to_x(n_start+dn-1)));
+          long n_mid = (long) std::round(0.5*(n_start + n_start + dn -1));
+          n_vec.push_back(n_mid);
           weight_sum.push_back(1.*dn);
 
           n_start += dn;
@@ -377,88 +361,93 @@ namespace alps {
           }
         }
       }
-      std::cout << "mesh_points " << x_sum.size() << std::endl;
+      int n_mesh = n_vec.size();
+      std::cout << "mesh_points " << n_mesh << std::endl;
 
-      //Spline interpolation
-      std::vector<double> x_array(n_vec.size()), y_re_array(n_vec.size()), y_imag_array(n_vec.size());
-      //note: shift by 1 to avoid NaN
-      std::transform(n_vec.begin(), n_vec.end(), x_array.begin(), n_to_x);
+      //Compute w tensor
+      auto w_tensor = ge::compute_w_tensor(n_vec, basis_f, basis_b);
 
-      Eigen::Tensor<dcomplex,3> w_tensor_spline(x_sum.size(), dim_b, dim_f);
-      for (int lp = 0; lp < dim_f; ++lp) {
-        for (int l = 0; l < dim_b; ++l) {
-          for (int n = 0; n < n_vec.size(); ++n) {
-            y_re_array[n] = w_tensor(n, l, lp).real();
-            y_imag_array[n] = w_tensor(n, l, lp).imag();
-          }
-          tk::spline spline_re, spline_imag;
-          spline_re.set_points(x_array, y_re_array);
-          spline_imag.set_points(x_array, y_imag_array);
-          for (int n = 0; n < x_sum.size(); ++n) {
-            w_tensor_spline(n, l, lp) = dcomplex(spline_re(x_sum[n]), spline_imag(x_sum[n]));
+      /*
+      for (int l=0; l < dim_b; ++l) {
+        for (int lp=0; lp < dim_f; ++lp) {
+          for (int n=0; n < n_vec.size(); ++n) {
+            if ((l+lp+n_vec[n])%2 == 0) {
+            } else {
+            }
+            std::cout << " w " << l << " " << lp << " " << n << " " << w_tensor(l, lp, n) << std::endl;
           }
         }
       }
+       */
 
+      //Compute Tnl_f
       Eigen::Tensor<dcomplex,2> Tnl_f;
       basis_f.compute_Tnl(n_vec, Tnl_f);
-      Eigen::Tensor<dcomplex,2> Tnl_f_spline(x_sum.size(), dim_f);
-      for (int l = 0; l < dim_f; ++l) {
-        for (int n = 0; n < n_vec.size(); ++n) {
-          y_re_array[n] = Tnl_f(n, l).real();
-          y_imag_array[n] = Tnl_f(n, l).imag();
-        }
-        tk::spline spline_re, spline_imag;
-        spline_re.set_points(x_array, y_re_array);
-        spline_imag.set_points(x_array, y_imag_array);
-        for (int n = 0; n < x_sum.size(); ++n) {
-          Tnl_f_spline(n, l) = dcomplex(spline_re(x_sum[n]), spline_imag(x_sum[n]));
+
+      Eigen::Tensor<dcomplex,2> Tnl_b;
+      basis_b.compute_Tnl(n_vec, Tnl_b);
+
+      std::cout << "debug_f " << Tnl_f(0,0) << " " << Tnl_f(0,1) << std::endl;
+      std::cout << "debug_b " << Tnl_b(4,0) << " " << Tnl_b(4,1) << " " << Tnl_b(4,2) << std::endl;
+
+      Eigen::Tensor<dcomplex,4> left_mat(dim_f,dim_f, dim_b, n_mesh);//(l1;l2;lp3, n)
+      Eigen::Tensor<dcomplex,4> right_mat(n_mesh, dim_b, dim_f, dim_f);//(n,l3;lp1;lp2)
+
+      for (int n = 0; n < n_mesh; ++n) {
+        //std::cout << " n " << n << " " << n_vec[n] << " " << weight_sum[n] << std::endl;
+        for (int lp3 = 0; lp3 < dim_b; ++lp3) {
+          for (int l2 = 0; l2 < dim_f; ++l2) {
+            for (int l1 = 0; l1 < dim_f; ++l1) {
+              left_mat(l1, l2, lp3, n) = std::conj(w_tensor(n, lp3, l1) * Tnl_f(n, l2));
+            }
+          }
         }
       }
 
-      C_tensor = Eigen::Tensor<double,6>(dim_f, dim_f, dim_b, dim_f, dim_f, dim_b);
-      Eigen::Tensor<dcomplex,3> left_mat(dim_f,dim_f, (int)x_sum.size());//(l1;l2, n)
-      Eigen::Tensor<dcomplex,3> right_mat((int)x_sum.size(), dim_b, dim_f);//(l3;lp1, n)
-      Eigen::Tensor<double,4> tmp_mat(dim_f, dim_f, dim_b, dim_f);
+      for (int lp2 = 0; lp2 < dim_f; ++lp2) {
+        for (int lp1 = 0; lp1 < dim_f; ++lp1) {
+          for (int l3 = 0; l3 < dim_b; ++l3) {
+            for (int n = 0; n < n_mesh; ++n) {
+              right_mat(n, l3, lp1, lp2) = w_tensor(n, l3, lp1) * Tnl_f(n, lp2) * weight_sum[n];
+            }
+          }
+        }
+      }
+
+      std::array<Eigen::IndexPair<int>,1> product_dims = { Eigen::IndexPair<int>(3, 0)};
+      //Eigen::Tensor<double,6> tmp_mat = 2*left_mat.contract(right_mat, product_dims).real();
+      //C_tensor = tmp_mat.shuffle(std::array<int,6>{{0,1,3,4,5,2}});
+
+      C_tensor = (2*left_mat.contract(right_mat, product_dims).real()).shuffle(
+          std::array<int,6>{{0,1,3,4,5,2}}
+      );
+
       for (int lp3 = 0; lp3 < dim_b; ++lp3) {
-        std::cout << "lp3" << lp3 << std::endl;
         for (int lp2 = 0; lp2 < dim_f; ++lp2) {
-
-          for (int n = 0; n < x_sum.size(); ++n) {
-            for (int l2 = 0; l2 < dim_f; ++l2) {
-              for (int l1 = 0; l1 < dim_f; ++l1) {
-                left_mat(l1,l2,n) = std::conj(w_tensor_spline(n,lp3,l1) * Tnl_f_spline(n,l2));
-              }
-            }
-          }
-
-          for (int lp1 = 0; lp1 < dim_f; ++lp1) {
-            for (int l3 = 0; l3 < dim_b; ++l3) {
-              for (int n = 0; n < x_sum.size(); ++n) {
-                right_mat(n,l3,lp1) = w_tensor_spline(n,l3,lp1) * Tnl_f_spline(n,lp2) * weight_sum[n];
-              }
-            }
-          }
-
-          std::array<Eigen::IndexPair<int>,1> product_dims = { Eigen::IndexPair<int>(2, 0) };
-          tmp_mat = 2*left_mat.contract(right_mat, product_dims).real();
-
           for (int lp1 = 0; lp1 < dim_f; ++lp1) {
             for (int l3 = 0; l3 < dim_b; ++l3) {
               for (int l2 = 0; l2 < dim_f; ++l2) {
-                auto coeff = -((l2+lp2)%2 == 0 ? 1.0 : -1.0);
+                auto sign = -((l2 + lp2) % 2 == 0 ? 1.0 : -1.0);
                 for (int l1 = 0; l1 < dim_f; ++l1) {
-                  C_tensor(l1, l2, l3, lp1, lp2, lp3) = coeff*tmp_mat(l1,l2,l3,lp1);
+                  C_tensor(l1, l2, l3, lp1, lp2, lp3) *= sign;
                 }
               }
             }
           }
-
-
         }
       }
 
+      Eigen::TensorMap<Eigen::Tensor<double,2>> C_matrix(C_tensor.data(), dim_f*dim_f*dim_b,dim_f*dim_f*dim_b);
+      std::array<Eigen::IndexPair<int>,1> product_dims2 = { Eigen::IndexPair<int>(1, 1) };
+      Eigen::Tensor<double,2> cc = C_matrix.contract(C_matrix, product_dims2);
+
+      for (int i = 0; i < 10; ++i) {
+        std::cout << i << " " << cc(i,i) <<  " " << cc(i,i+1) << " " << cc(i,i+2) << " " << cc(i,i+3) << std::endl;
+      }
+
+
     }
+
 
   }//namespace gf_extension
 }//namespace alps

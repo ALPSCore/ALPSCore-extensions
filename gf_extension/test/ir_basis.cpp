@@ -558,6 +558,12 @@ TEST(G2, wtensor) {
           tmp += std::conj(Tnl_b_pn(m,l)) * Tnl_f_pn(m+n, lp);
         }
         w_tensor(n,l,lp) = tmp;
+
+        //if ((l+lp+n)%2==0) {
+          //ASSERT_NEAR(std::abs(w_tensor(n,l,lp).real()), 0.0, 1e-5);
+        //} else {
+          //ASSERT_NEAR(std::abs(w_tensor(n,l,lp).imag()), 0.0, 1e-5);
+        //}
       }
     }
   }
@@ -655,22 +661,24 @@ TEST_P(G2WTensorTest, CTensor) {
   using dcomplex = std::complex<double>;
 
   double Lambda = GetParam();
-  int max_dim_f = 20;
-  int max_dim_b = 20;
+  int max_dim_f = 15;
+  int max_dim_b = 15;
 
   namespace ge = alps::gf_extension;
 
-  ge::fermionic_ir_basis basis_f(Lambda, max_dim_f);
-  ge::bosonic_ir_basis basis_b(Lambda, max_dim_b);
+  ge::fermionic_ir_basis basis_f(Lambda, max_dim_f, 1e-12);
+  ge::bosonic_ir_basis basis_b(Lambda, max_dim_b, 1e-12);
   const int dim_f = basis_f.dim();
   const int dim_b = basis_b.dim();
 
+  std::cout << "dim " << dim_f << " " << dim_b << std::endl;
+
   Eigen::Tensor<double,6> C_tensor;
   //compute_C_tensor(basis_f, basis_b, C_tensor, 1.02);
-  compute_C_tensor(basis_f, basis_b, C_tensor, 1.2, 100);
+  compute_C_tensor(basis_f, basis_b, C_tensor, 1.05, 200);
 
   Eigen::Tensor<double,6> C_tensor2;
-  compute_C_tensor(basis_f, basis_b, C_tensor2, 1.1, 100);
+  compute_C_tensor(basis_f, basis_b, C_tensor2, 1.02, 200);
 
   //std::cout << C_tensor.dimension(0) << std::endl;
   //std::cout << C_tensor.dimension(1) << std::endl;
@@ -686,5 +694,6 @@ TEST_P(G2WTensorTest, CTensor) {
 
 INSTANTIATE_TEST_CASE_P(G2WTensorTestLambda,
                         G2WTensorTest,
-                        ::testing::Values(10.0, 1000.0, 10000.0));
+                        ::testing::Values(1000.0, 10000.0));
+//::testing::Values(10.0, 1000.0, 10000.0));
 

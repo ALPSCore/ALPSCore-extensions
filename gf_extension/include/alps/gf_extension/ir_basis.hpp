@@ -41,8 +41,10 @@ namespace gf_extension {
     /// return statistics
     virtual alps::gf::statistics::statistics_type get_statistics() const = 0;
 
+#ifndef SWIG
     /// return a reference to a copy
     virtual boost::shared_ptr<kernel> clone() const = 0;
+#endif
   };
 
 #ifdef SWIG
@@ -72,9 +74,11 @@ namespace gf_extension {
       return alps::gf::statistics::FERMIONIC;
     }
 
+#ifndef SWIG
     boost::shared_ptr<kernel> clone() const {
       return boost::shared_ptr<kernel>(new fermionic_kernel(Lambda_));
     }
+#endif
 
    private:
     double Lambda_;
@@ -105,9 +109,11 @@ namespace gf_extension {
       return alps::gf::statistics::BOSONIC;
     }
 
+#ifndef SWIG
     boost::shared_ptr<kernel> clone() const {
       return boost::shared_ptr<kernel>(new bosonic_kernel(Lambda_));
     }
+#endif
 
    private:
     double Lambda_;
@@ -181,16 +187,19 @@ namespace gf_extension {
      * @param n_max max Matsubara freq. index
      * @param Tnl max
      */
+#ifndef SWIG
     void compute_Tnl(
         int n_min, int n_max,
         boost::multi_array<std::complex<double>, 2> &Tnl
     ) const;
+#endif
 
     void compute_Tnl(
         int n_min, int n_max,
         Eigen::Tensor<std::complex<double>, 2> &Tnl
     ) const;
 
+#ifndef SWIG
     void compute_Tnl(
         const std::vector<long>& n_vec,
         Eigen::Tensor<std::complex<double>, 2> &Tnl
@@ -200,6 +209,8 @@ namespace gf_extension {
                                                                              basis_functions_,
                                                                              Tnl);
     }
+#endif
+
   };
 
 #ifdef SWIG
