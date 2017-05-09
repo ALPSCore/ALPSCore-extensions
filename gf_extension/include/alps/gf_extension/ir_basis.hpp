@@ -192,14 +192,12 @@ namespace gf_extension {
         int n_min, int n_max,
         boost::multi_array<std::complex<double>, 2> &Tnl
     ) const;
-#endif
 
     void compute_Tnl(
         int n_min, int n_max,
         Eigen::Tensor<std::complex<double>, 2> &Tnl
     ) const;
 
-#ifndef SWIG
     void compute_Tnl(
         const std::vector<long>& n_vec,
         Eigen::Tensor<std::complex<double>, 2> &Tnl
@@ -210,6 +208,13 @@ namespace gf_extension {
                                                                              Tnl);
     }
 #endif
+
+    Eigen::Tensor<std::complex<double>,2>
+    compute_Tnl(const std::vector<long>& n_vec) {
+        Eigen::Tensor<std::complex<double>, 2> Tnl;
+        compute_Tnl(n_vec, Tnl);
+        return Tnl;
+    }
 
   };
 
