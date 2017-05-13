@@ -1,6 +1,7 @@
 #pragma once
 
 #include <alps/gf/gf.hpp>
+#include <alps/gf_extension/piecewise_polynomial.hpp>
 
 #include <Eigen/Core>
 #include <Eigen/CXX11/Tensor>
@@ -776,6 +777,231 @@ namespace gf_extension {
     int niw_;
     nmesh_type nmesh_;
     Eigen::Tensor<std::complex<double>,2> Tnl_;
+  };
+
+  template<typename T>
+  Eigen::Tensor<std::complex<T>, 3>
+  compute_w_tensor(
+      const std::vector<long> &n_vec,
+      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_f,
+      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_b) {
+    using dcomplex = std::complex<double>;
+
+    const int dim_f = basis_f.size();
+    const int dim_b = basis_b.size();
+
+    std::vector<double> w(n_vec.size());
+    for (int n = 0; n < n_vec.size(); ++n) {
+      w[n] = M_PI * (n_vec[n] + 0.5);
+    }
+
+    std::vector<alps::gf::piecewise_polynomial<double>> prods(dim_f * dim_b);
+    for (int lp = 0; lp < dim_f; ++lp) {
+      for (int l = 0; l < dim_b; ++l) {
+        prods[l + lp * dim_b] = alps::gf_extension::multiply(basis_b[l], basis_f[lp]);
+      }
+    }
+
+    Eigen::Tensor<dcomplex, 2> integral(n_vec.size(), prods.size());
+    const int b_size = 500;
+    for (int b = 0; b < n_vec.size()/b_size+1; ++b) {
+      auto n_start = b * b_size;
+      auto n_last = std::min((b+1) * b_size-1, (int) n_vec.size()-1);
+      if (n_start > n_last) {
+        continue;
+      }
+
+      std::vector<double> w_batch;
+      for (int n=n_start; n<=n_last; ++n) {
+        w_batch.push_back(w[n]);
+      }
+      Eigen::Tensor<dcomplex,2> sub;
+      alps::gf_extension::compute_integral_with_exp(w_batch, prods, sub);
+      for (int n=n_start; n<=n_last; ++n) {
+        for (int j=0; j<prods.size(); ++j) {
+          integral(n,j) = sub(n-n_start,j);
+        }
+      }
+    }
+
+    auto w_tensor = Eigen::Tensor<dcomplex, 3>(n_vec.size(), dim_b, dim_f);
+    for (int lp = 0; lp < dim_f; ++lp) {
+      for (int l = 0; l < dim_b; ++l) {
+        for (int n = 0; n < n_vec.size(); ++n) {
+          w_tensor(n, l, lp) = integral(n, l + lp * dim_b);
+        }
+      }
+    }
+    return w_tensor;
+  }
+
+  template<typename T>
+  Eigen::Tensor<T,6>
+  compute_C_tensor(
+      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_f,
+      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
+      double ratio_sum=1.01,
+      int max_n_exact_sum=10000
+  ) {
+    using dcomplex = std::complex<double>;
+    namespace ge = alps::gf_extension;
+
+    Eigen::Tensor<double,6> C_tensor;
+
+    const int dim_f = basis_f.size();
+    const int dim_b = basis_b.size();
+
+    //Construct a mesh
+    double max_n = 1E+10;
+    std::vector<long> n_vec;
+    std::vector<double> weight_sum;
+    {
+      long n_start = 0, dn = 1;
+      double tmp = 0.0;
+      while(n_start < max_n) {
+        long n_mid = (long) std::round(0.5*(n_start + n_start + dn -1));
+        n_vec.push_back(n_mid);
+        weight_sum.push_back(1.*dn);
+
+        n_start += dn;
+        if (n_start < max_n_exact_sum) {
+          dn = 1;
+        } else {
+          dn = std::max(long(dn * ratio_sum), dn+1);
+        }
+      }
+    }
+    int n_mesh = n_vec.size();
+
+    //Compute w tensor
+    auto w_tensor = compute_w_tensor(n_vec, basis_f, basis_b);
+
+    //Compute Tnl_f
+    Eigen::Tensor<dcomplex,2> Tnl_f;
+    compute_transformation_matrix_to_matsubara(n_vec, alps::gf::statistics::FERMIONIC, basis_f, Tnl_f);
+
+    Eigen::Tensor<dcomplex,2> Tnl_b;
+    compute_transformation_matrix_to_matsubara(n_vec, alps::gf::statistics::BOSONIC, basis_b, Tnl_b);
+
+    Eigen::Tensor<dcomplex,4> left_mat(dim_f, dim_f, dim_b, n_mesh);//(l1;l2;lp3, n)
+    Eigen::Tensor<dcomplex,4> right_mat(n_mesh, dim_b, dim_f, dim_f);//(n,l3;lp1;lp2)
+
+    for (int n = 0; n < n_mesh; ++n) {
+      for (int lp3 = 0; lp3 < dim_b; ++lp3) {
+        for (int l2 = 0; l2 < dim_f; ++l2) {
+          for (int l1 = 0; l1 < dim_f; ++l1) {
+            left_mat(l1, l2, lp3, n) = std::conj(w_tensor(n, lp3, l1) * Tnl_f(n, l2));
+          }
+        }
+      }
+    }
+
+    for (int lp2 = 0; lp2 < dim_f; ++lp2) {
+      for (int lp1 = 0; lp1 < dim_f; ++lp1) {
+        for (int l3 = 0; l3 < dim_b; ++l3) {
+          for (int n = 0; n < n_mesh; ++n) {
+            right_mat(n, l3, lp1, lp2) = w_tensor(n, l3, lp1) * Tnl_f(n, lp2) * weight_sum[n];
+          }
+        }
+      }
+    }
+
+    std::array<Eigen::IndexPair<int>,1> product_dims = { Eigen::IndexPair<int>(3, 0)};
+
+    C_tensor = (2*left_mat.contract(right_mat, product_dims).real()).shuffle(
+        std::array<int,6>{{0,1,3,4,5,2}}
+    );
+
+    for (int lp3 = 0; lp3 < dim_b; ++lp3) {
+      for (int lp2 = 0; lp2 < dim_f; ++lp2) {
+        for (int lp1 = 0; lp1 < dim_f; ++lp1) {
+          for (int l3 = 0; l3 < dim_b; ++l3) {
+            for (int l2 = 0; l2 < dim_f; ++l2) {
+              auto sign = -((l2 + lp2) % 2 == 0 ? 1.0 : -1.0);
+              for (int l1 = 0; l1 < dim_f; ++l1) {
+                C_tensor(l1, l2, l3, lp1, lp2, lp3) *= sign;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return C_tensor;
+  }
+
+  template<typename SEVEN_INDEX_GF>
+  class transformer_Hartree_to_Fock {
+    using M4 = typename SEVEN_INDEX_GF::mesh4_type;
+    using M5 = typename SEVEN_INDEX_GF::mesh5_type;
+    using M6 = typename SEVEN_INDEX_GF::mesh6_type;
+    using M7 = typename SEVEN_INDEX_GF::mesh7_type;
+
+   public:
+    transformer_Hartree_to_Fock(
+      const alps::gf::numerical_mesh<double>& mesh_f,
+      const alps::gf::numerical_mesh<double>& mesh_b) : mesh_f_(mesh_f), mesh_b_(mesh_b) {
+
+      if (mesh_f.statistics() != alps::gf::statistics::FERMIONIC) {
+        throw std::invalid_argument("mesh_f must be fermionic.");
+      }
+      if (mesh_b.statistics() != alps::gf::statistics::BOSONIC) {
+        throw std::invalid_argument("mesh_b must be bosonic.");
+      }
+
+      std::vector<alps::gf::piecewise_polynomial<double>> basis_f, basis_b;
+      for (int l=0; l<mesh_f.extent(); ++l) {
+        basis_f.push_back(mesh_f.basis_function(l));
+      }
+      for (int l=0; l<mesh_b.extent(); ++l) {
+        basis_b.push_back(mesh_b.basis_function(l));
+      }
+
+      C_tensor_ = compute_C_tensor(basis_f, basis_b).cast<std::complex<double>>();
+    }
+
+    SEVEN_INDEX_GF operator()(const SEVEN_INDEX_GF& G2_H) const {
+      using dcomplex = std::complex<double>;
+      if (G2_H.mesh1() != mesh_f_ || G2_H.mesh2() != mesh_f_ || G2_H.mesh3() != mesh_b_) {
+        throw std::runtime_error("mesh mismatch");
+      }
+
+      auto G2_F(G2_H);
+
+      int dim_f = G2_H.mesh1().extent();
+      int dim_b = G2_H.mesh3().extent();
+
+      int n4 = G2_H.mesh4().extent();
+      int n5 = G2_H.mesh5().extent();
+      int n6 = G2_H.mesh6().extent();
+      int n7 = G2_H.mesh7().extent();
+
+      Eigen::TensorMap<Eigen::Tensor<dcomplex,7>> G2_H_map(const_cast<dcomplex*>(G2_H.data().origin()), n7, n6, n5, n4, dim_b, dim_f, dim_f);
+
+      //G_F_data: dim_f, dim_f, dim_b, f4, f3, f2, f1
+      std::array<Eigen::IndexPair<int>,3> product_dims = {
+          Eigen::IndexPair<int>(4, 6),
+          Eigen::IndexPair<int>(5, 5),
+          Eigen::IndexPair<int>(6, 4)
+      };
+
+      Eigen::TensorMap<Eigen::Tensor<dcomplex,7>> G2_F_map(const_cast<dcomplex*>(G2_F.data().origin()), n7, n6, n5, n4, dim_b, dim_f, dim_f);
+
+      //Eigen::Tensor<dcomplex,7> tmp3 = C_tensor_.cast<dcomplex>().contract(Eigen::Tensor<dcomplex,7>(n7, n6, n5, n4, dim_b, dim_f, dim_f), product_dims);
+
+      Eigen::Tensor<dcomplex,7> tmp = C_tensor_.contract(G2_H_map, product_dims);
+
+      std::array<int,7> shuffle {{2, 1, 0, 3, 4, 5, 6}};
+      Eigen::Tensor<dcomplex,7> tmp2 = tmp.shuffle(shuffle);
+
+      G2_F_map = tmp;
+
+      return G2_F;
+    }
+
+   private:
+    Eigen::Tensor<std::complex<double>,6> C_tensor_;
+    alps::gf::numerical_mesh<double> mesh_f_, mesh_b_;
   };
 
   /*

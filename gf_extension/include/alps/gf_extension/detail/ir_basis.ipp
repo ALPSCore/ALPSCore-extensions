@@ -367,19 +367,6 @@ namespace alps {
       //Compute w tensor
       auto w_tensor = ge::compute_w_tensor(n_vec, basis_f, basis_b);
 
-      /*
-      for (int l=0; l < dim_b; ++l) {
-        for (int lp=0; lp < dim_f; ++lp) {
-          for (int n=0; n < n_vec.size(); ++n) {
-            if ((l+lp+n_vec[n])%2 == 0) {
-            } else {
-            }
-            std::cout << " w " << l << " " << lp << " " << n << " " << w_tensor(l, lp, n) << std::endl;
-          }
-        }
-      }
-       */
-
       //Compute Tnl_f
       Eigen::Tensor<dcomplex,2> Tnl_f;
       basis_f.compute_Tnl(n_vec, Tnl_f);
@@ -436,16 +423,9 @@ namespace alps {
           }
         }
       }
-
-      Eigen::TensorMap<Eigen::Tensor<double,2>> C_matrix(C_tensor.data(), dim_f*dim_f*dim_b,dim_f*dim_f*dim_b);
-      std::array<Eigen::IndexPair<int>,1> product_dims2 = { Eigen::IndexPair<int>(1, 1) };
-      Eigen::Tensor<double,2> cc = C_matrix.contract(C_matrix, product_dims2);
-
-      for (int i = 0; i < 10; ++i) {
-        std::cout << i << " " << cc(i,i) <<  " " << cc(i,i+1) << " " << cc(i,i+2) << " " << cc(i,i+3) << std::endl;
-      }
-
-
+      //Eigen::TensorMap<Eigen::Tensor<double,2>> C_matrix(C_tensor.data(), dim_f*dim_f*dim_b,dim_f*dim_f*dim_b);
+      //std::array<Eigen::IndexPair<int>,1> product_dims2 = { Eigen::IndexPair<int>(1, 1) };
+      //Eigen::Tensor<double,2> cc = C_matrix.contract(C_matrix, product_dims2);
     }
 
 
