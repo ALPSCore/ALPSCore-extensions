@@ -840,8 +840,8 @@ namespace gf_extension {
   compute_C_tensor(
       const std::vector<alps::gf::piecewise_polynomial<T>>& basis_f,
       const std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
-      double ratio_sum=1.01,
-      int max_n_exact_sum=10000
+      double ratio_sum=1.02,
+      int max_n_exact_sum=200
   ) {
     using dcomplex = std::complex<double>;
     namespace ge = alps::gf_extension;
@@ -980,14 +980,12 @@ namespace gf_extension {
 
       //G_F_data: dim_f, dim_f, dim_b, f4, f3, f2, f1
       std::array<Eigen::IndexPair<int>,3> product_dims = {
-          Eigen::IndexPair<int>(4, 6),
-          Eigen::IndexPair<int>(5, 5),
-          Eigen::IndexPair<int>(6, 4)
+          Eigen::IndexPair<int>(3, 6),
+          Eigen::IndexPair<int>(4, 5),
+          Eigen::IndexPair<int>(5, 4)
       };
 
       Eigen::TensorMap<Eigen::Tensor<dcomplex,7>> G2_F_map(const_cast<dcomplex*>(G2_F.data().origin()), n7, n6, n5, n4, dim_b, dim_f, dim_f);
-
-      //Eigen::Tensor<dcomplex,7> tmp3 = C_tensor_.cast<dcomplex>().contract(Eigen::Tensor<dcomplex,7>(n7, n6, n5, n4, dim_b, dim_f, dim_f), product_dims);
 
       Eigen::Tensor<dcomplex,7> tmp = C_tensor_.contract(G2_H_map, product_dims);
 
