@@ -176,8 +176,13 @@ namespace gf_extension {
     /**
      * Construct a mesh
      */
-    alps::gf::numerical_mesh<double> construct_mesh(double beta) const {
-      return alps::gf::numerical_mesh<double>{beta, all(), get_statistics()};
+    alps::gf::numerical_mesh<double> construct_mesh(double beta, int nl) const {
+      if (nl > dim()) {
+        throw std::invalid_argument("nl cannot be larger dim().");
+      }
+      std::vector<alps::gf::piecewise_polynomial<double>> bf(nl);
+      std::copy(basis_functions_.begin(), basis_functions_.begin()+nl, bf.begin());
+      return alps::gf::numerical_mesh<double>{beta, bf, get_statistics()};
     }
 
     /**

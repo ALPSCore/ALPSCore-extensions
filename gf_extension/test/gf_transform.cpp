@@ -21,6 +21,7 @@ class GfTransformTest : public testing::Test {
   double beta = 100.0;
   int max_dim = 100;
   alps::gf_extension::fermionic_ir_basis basis;
+  alps::gf_extension::bosonic_ir_basis basis_b;
   gl_type Gl;
   gtau_type Gtau;
   gomega_type Gomega;
@@ -39,7 +40,9 @@ class GfTransformTest : public testing::Test {
     return - 0.5/(zi*wn - 1.0) - 0.5/(zi*wn + 1.0);
   }
 
-  GfTransformTest() : basis(alps::gf_extension::fermionic_ir_basis(Lambda, max_dim, 1e-10, 501)),
+  GfTransformTest() :
+             basis(Lambda, max_dim, 1e-10, 501),
+             basis_b(Lambda, max_dim, 1e-10, 501),
              Gtau(g::itime_mesh(beta, basis(0).num_sections()+1), g::index_mesh(1), g::index_mesh(1)),
              Gl(g::numerical_mesh<double>(beta, basis.all(), g::statistics::FERMIONIC), g::index_mesh(1), g::index_mesh(1))
   {}
@@ -134,6 +137,49 @@ TEST_F(GfTransformTest, IRtoMatsubara) {
         ) < 1e-6
     );
   }
+}
+
+TEST_F(GfTransformTest, BubbleH) {
+  int nl_f = 10;
+  int nl_b = 20;
+
+  auto g2_H = alps::gf_extension::compute_G2_bubble_H(
+      Gl,
+      basis.construct_mesh(beta, nl_f),
+      basis_b.construct_mesh(beta, nl_b)
+  );
+
+  using nit = alps::gf::numerical_mesh<double>::index_type;
+
+  const auto i0 = g::index_mesh::index_type(0);
+  ASSERT_TRUE(nl_b == g2_H.mesh3().extent());
+  ASSERT_TRUE(nl_f == g2_H.mesh1().extent());
+
+  //check if T0l^B drop to sufficiently small values.
+  double max_val = 0;
+  for (int l2=0; l2<nl_f; ++l2) {
+    for (int l1 = 0; l1 < nl_f; ++l1) {
+      max_val = std::max(max_val, std::abs(g2_H(nit(l1),nit(l2),nit(nl_b-1),i0,i0,i0,i0)));
+    }
+  }
+  EXPECT_TRUE(max_val < 1e-10);
+
+  alps::gf_extension::transformer_Hartree_to_Fock<decltype(g2_H)> trans(g2_H.mesh1(), g2_H.mesh3());
+
+  auto g2_F = trans(g2_H);
+  //TODO: how to check g2_F
+
+  /*
+  for (int l2=0; l2<nl_f; ++l2) {
+    for (int l1 = 0; l1 < nl_f; ++l1) {
+      std::cout << l1 << " " << l2
+      << " " << std::abs(g2_H(nit(l1),nit(l2),nit(0),i0,i0,i0,i0))
+      << " " << std::abs(g2_F(nit(l1),nit(l2),nit(0),i0,i0,i0,i0))
+       << std::endl;
+    }
+    std::cout << std::endl;
+  }
+  */
 }
 
 

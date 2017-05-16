@@ -9,35 +9,35 @@
 namespace alps {
 namespace gf_extension {
   //AVOID USING BOOST_TYPEOF
-  template <class T1, class T2>
+  template<class T1, class T2>
   struct result_of_overlap {
     typedef std::complex<double> value;
   };
 
-  template <>
-  struct result_of_overlap<double,double> {
+  template<>
+  struct result_of_overlap<double, double> {
     typedef double value;
   };
 
   template<class T>
   void compute_integral_with_exp(
-      const std::vector<double>& w,
-      const std::vector <alps::gf::piecewise_polynomial<T>> &pp_func,
-      Eigen::Tensor<std::complex<double>,2> &Tnl
+      const std::vector<double> &w,
+      const std::vector<alps::gf::piecewise_polynomial<T>> &pp_func,
+      Eigen::Tensor<std::complex<double>, 2> &Tnl
   );
 
   namespace detail {
     template<typename S1, typename S2, unsigned long N>
-    void copy_from_tensor(const Eigen::Tensor<S1,N>& tensor, boost::multi_array<S2,N>& marray) {
+    void copy_from_tensor(const Eigen::Tensor<S1, N> &tensor, boost::multi_array<S2, N> &marray) {
 
       assert(marray.num_elements() == tensor.size());
 
       //From ColumnMajar to RowMajor. This also swaps dimensions.
-      Eigen::Tensor<S1,N,Eigen::RowMajor> tensor_tmp = tensor.swap_layout();
+      Eigen::Tensor<S1, N, Eigen::RowMajor> tensor_tmp = tensor.swap_layout();
 
       // Swap back dimensions
-      std::array<int,N> shuffle;
-      for (int i=0; i<N; ++i) {
+      std::array<int, N> shuffle;
+      for (int i = 0; i < N; ++i) {
         shuffle[i] = N - 1 - i;
       }
       tensor_tmp = tensor_tmp.shuffle(shuffle);
@@ -46,21 +46,21 @@ namespace gf_extension {
     }
 
     template<typename S1, typename S2, std::size_t N1, int N2>
-    void copy_to_tensor(const boost::multi_array<S1,N1>& marray, Eigen::Tensor<S2,N2>& tensor) {
+    void copy_to_tensor(const boost::multi_array<S1, N1> &marray, Eigen::Tensor<S2, N2> &tensor) {
 
       static_assert(N1 == N2, "Imcompatible dimensions");
 
       assert(marray.num_elements() == tensor.size());
 
-      Eigen::Tensor<S2,N2,Eigen::RowMajor> tensor_tmp(tensor.dimensions());
+      Eigen::Tensor<S2, N2, Eigen::RowMajor> tensor_tmp(tensor.dimensions());
 
-      std::copy(marray.origin(), marray.origin()+marray.num_elements(), tensor_tmp.data());
+      std::copy(marray.origin(), marray.origin() + marray.num_elements(), tensor_tmp.data());
 
-      Eigen::Tensor<S2,N2> tensor_tmp2 = tensor_tmp.swap_layout();
+      Eigen::Tensor<S2, N2> tensor_tmp2 = tensor_tmp.swap_layout();
 
       // Swap back dimensions
-      std::array<int,N1> shuffle;
-      for (int i=0; i<N1; ++i) {
+      std::array<int, N1> shuffle;
+      for (int i = 0; i < N1; ++i) {
         shuffle[i] = N1 - 1 - i;
       }
 
@@ -131,7 +131,7 @@ namespace gf_extension {
         alps::gf::statistics::statistics_type s,
         const std::vector<double> &section_edges,
         int k,
-        boost::multi_array<std::complex<T>,3> &coeffs) {
+        boost::multi_array<std::complex<T>, 3> &coeffs) {
 
       if (n_min < 0) {
         throw std::invalid_argument("n_min cannot be negative.");
@@ -143,7 +143,7 @@ namespace gf_extension {
       const int N = section_edges.size() - 1;
 
       std::complex<double> z;
-      coeffs.resize(boost::extents[n_max-n_min+1][N][k + 1]);
+      coeffs.resize(boost::extents[n_max - n_min + 1][N][k + 1]);
 
       std::vector<double> pre_factor(k + 1);
       pre_factor[0] = 1.0;
@@ -162,7 +162,7 @@ namespace gf_extension {
           std::complex<T> exp0 = std::exp(z * (x + 1));
           std::complex<T> z_power = 1.0;
           for (int j = 0; j < k + 1; ++j) {
-            coeffs[n-n_min][section][j] = exp0 * z_power * pre_factor[j];
+            coeffs[n - n_min][section][j] = exp0 * z_power * pre_factor[j];
             z_power *= z;
           }
         }
@@ -172,10 +172,10 @@ namespace gf_extension {
     /// Construct piecewise polynomials representing exponential functions: exp(i w_i x)
     template<class T>
     void construct_exp_functions_coeff(
-        const std::vector<double>& w,
+        const std::vector<double> &w,
         const std::vector<double> &section_edges,
         int k,
-        boost::multi_array<std::complex<T>,3> &coeffs) {
+        boost::multi_array<std::complex<T>, 3> &coeffs) {
       const int N = section_edges.size() - 1;
 
       std::complex<double> z;
@@ -212,29 +212,29 @@ namespace gf_extension {
  */
     template<class T>
     void compute_transformation_matrix_to_matsubara_impl(
-        const std::vector<long>& n_vec,
+        const std::vector<long> &n_vec,
         alps::gf::statistics::statistics_type statis,
-        const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
-        Eigen::Tensor<std::complex<double>,2> &Tnl
+        const std::vector<alps::gf::piecewise_polynomial<T>> &bf_src,
+        Eigen::Tensor<std::complex<double>, 2> &Tnl
     ) {
       typedef std::complex<double> dcomplex;
-      typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
-      typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
-      typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
+      typedef alps::gf::piecewise_polynomial<std::complex<double> > pp_type;
+      typedef Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+      typedef Eigen::Tensor<std::complex<double>, 2> tensor_t;
 
       //if (n_min < 0) {
-        //throw std::invalid_argument("n_min cannot be negative.");
+      //throw std::invalid_argument("n_min cannot be negative.");
       //}
       //if (n_min > n_max) {
-        //throw std::invalid_argument("n_min cannot be larger than n_max.");
+      //throw std::invalid_argument("n_min cannot be larger than n_max.");
       //}
-      for (int n=0; n<n_vec.size(); ++n) {
+      for (int n = 0; n < n_vec.size(); ++n) {
         if (n_vec[n] < 0) {
           throw std::runtime_error("n_vec cannot be negative.");
         }
       }
-      for (int n=0; n<n_vec.size()-1; ++n) {
-        if (n_vec[n] > n_vec[n+1]) {
+      for (int n = 0; n < n_vec.size() - 1; ++n) {
+        if (n_vec[n] > n_vec[n + 1]) {
           throw std::runtime_error("n_vec must be in ascending order.");
         }
       }
@@ -257,11 +257,10 @@ namespace gf_extension {
       }
       for (int n = 0; n < w.size(); ++n) {
         for (int l = 0; l < bf_src.size(); ++l) {
-          Tnl(n,l) *= inv_norm[l] * std::sqrt(0.5);
+          Tnl(n, l) *= inv_norm[l] * std::sqrt(0.5);
         }
       }
     }
-
 
   }//namespace detail
 
@@ -287,14 +286,14 @@ namespace gf_extension {
  */
   template<class T>
   void compute_integral_with_exp(
-      const std::vector<double>& w,
-      const std::vector <alps::gf::piecewise_polynomial<T>> &pp_func,
-      Eigen::Tensor<std::complex<double>,2> &Tnl
+      const std::vector<double> &w,
+      const std::vector<alps::gf::piecewise_polynomial<T>> &pp_func,
+      Eigen::Tensor<std::complex<double>, 2> &Tnl
   ) {
     typedef std::complex<double> dcomplex;
-    typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
-    typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
-    typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
+    typedef alps::gf::piecewise_polynomial<std::complex<double> > pp_type;
+    typedef Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+    typedef Eigen::Tensor<std::complex<double>, 2> tensor_t;
 
     //order of polynomials used for representing exponential functions internally.
     const int k_iw = 8;
@@ -314,8 +313,8 @@ namespace gf_extension {
     const int n_iw = w.size();
     const int n_max = n_iw - 1;
 
-    for (int i=0; i<w.size()-1; ++i) {
-      if (w[i] > w[i+1]) {
+    for (int i = 0; i < w.size() - 1; ++i) {
+      if (w[i] > w[i + 1]) {
         throw std::runtime_error("w must be give in ascending order.");
       }
     }
@@ -323,7 +322,7 @@ namespace gf_extension {
     //Use Taylor expansion for exp(i w_n tau) for w_n*dx < cutoff*M_PI
     const double cutoff = 0.1;
 
-    boost::multi_array<std::complex<double>,3> exp_coeffs(boost::extents[w.size()][n_section][k_iw+1]);
+    boost::multi_array<std::complex<double>, 3> exp_coeffs(boost::extents[w.size()][n_section][k_iw + 1]);
     detail::construct_exp_functions_coeff(w, pp_func[0].section_edges(), k_iw, exp_coeffs);
 
     matrix_t left_mid_matrix(n_iw, k + 1);
@@ -347,7 +346,7 @@ namespace gf_extension {
       }
 
       //Use Taylor expansion for exp(i w_n tau) for w_n*dx < cutoff*M_PI
-      const double w_max_cs = cutoff*M_PI/dx;
+      const double w_max_cs = cutoff * M_PI / dx;
       int n_max_cs = -1;
       for (int i = 0; i < w.size(); ++i) {
         if (w[i] <= w_max_cs) {
@@ -405,7 +404,7 @@ namespace gf_extension {
     Tnl = tensor_t(n_iw, pp_func.size());
     for (int n = 0; n < n_iw; ++n) {
       for (int l = 0; l < pp_func.size(); ++l) {
-        Tnl(n,l) = r(n, l);
+        Tnl(n, l) = r(n, l);
       }
     }
   }
@@ -424,29 +423,29 @@ namespace gf_extension {
   void compute_transformation_matrix_to_matsubara(
       int n_min, int n_max,
       alps::gf::statistics::statistics_type statis,
-      const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
-      Eigen::Tensor<std::complex<double>,2> &Tnl
+      const std::vector<alps::gf::piecewise_polynomial<T>> &bf_src,
+      Eigen::Tensor<std::complex<double>, 2> &Tnl
   ) {
     const int num_n = n_max - n_min + 1;
     const int batch_size = 500;
-    Tnl = Eigen::Tensor<std::complex<double>,2>(num_n, bf_src.size());
-    Eigen::Tensor<std::complex<double>,2> Tnl_batch(batch_size, bf_src.size());
+    Tnl = Eigen::Tensor<std::complex<double>, 2>(num_n, bf_src.size());
+    Eigen::Tensor<std::complex<double>, 2> Tnl_batch(batch_size, bf_src.size());
     //TODO: use MPI
     //Split into batches to avoid using too much memory
-    for (int ib = 0; ib < num_n/batch_size+1; ++ib) {
+    for (int ib = 0; ib < num_n / batch_size + 1; ++ib) {
       int n_min_batch = batch_size * ib;
-      int n_max_batch = std::min(batch_size * (ib+1) - 1, n_max);
-      if (n_max_batch - n_min_batch <= 0) {
+      int n_max_batch = std::min(batch_size * (ib + 1) - 1, n_max);
+      if (n_max_batch - n_min_batch < 0) {
         continue;
       }
       std::vector<long> n_vec;
-      for (int n=n_min_batch; n<=n_max_batch; ++n) {
+      for (int n = n_min_batch; n <= n_max_batch; ++n) {
         n_vec.push_back(n);
       }
       detail::compute_transformation_matrix_to_matsubara_impl(n_vec, statis, bf_src, Tnl_batch);
       for (int j = 0; j < bf_src.size(); ++j) {
         for (int n = n_min_batch; n <= n_max_batch; ++n) {
-          Tnl(n-n_min, j) = Tnl_batch(n-n_min_batch, j);
+          Tnl(n - n_min, j) = Tnl_batch(n - n_min_batch, j);
         }
       }
     }
@@ -462,31 +461,31 @@ namespace gf_extension {
  */
   template<class T>
   void compute_transformation_matrix_to_matsubara(
-      const std::vector<long>& n,
+      const std::vector<long> &n,
       alps::gf::statistics::statistics_type statis,
-      const std::vector <alps::gf::piecewise_polynomial<T>> &bf_src,
-      Eigen::Tensor<std::complex<double>,2> &Tnl
+      const std::vector<alps::gf::piecewise_polynomial<T>> &bf_src,
+      Eigen::Tensor<std::complex<double>, 2> &Tnl
   ) {
     typedef std::complex<double> dcomplex;
-    typedef alps::gf::piecewise_polynomial<std::complex < double> > pp_type;
-    typedef Eigen::Matrix <std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
-    typedef Eigen::Tensor<std::complex<double>,2> tensor_t;
+    typedef alps::gf::piecewise_polynomial<std::complex<double> > pp_type;
+    typedef Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+    typedef Eigen::Tensor<std::complex<double>, 2> tensor_t;
 
     if (n.size() == 0) {
       return;
     }
 
-    for (int i=0; i < n.size()-1; ++i) {
-      if (n[i] > n[i+1]) {
+    for (int i = 0; i < n.size() - 1; ++i) {
+      if (n[i] > n[i + 1]) {
         throw std::runtime_error("n must be in strictly ascending order!");
       }
     }
 
     std::vector<double> w;
     if (statis == alps::gf::statistics::FERMIONIC) {
-      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) {return M_PI*(x+0.5);});
+      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) { return M_PI * (x + 0.5); });
     } else {
-      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) {return M_PI*x;});
+      std::transform(n.begin(), n.end(), std::back_inserter(w), [](double x) { return M_PI * x; });
     }
 
     compute_integral_with_exp(w, bf_src, Tnl);
@@ -497,7 +496,7 @@ namespace gf_extension {
     }
     for (int n = 0; n < w.size(); ++n) {
       for (int l = 0; l < bf_src.size(); ++l) {
-        Tnl(n,l) *= inv_norm[l] * std::sqrt(0.5);
+        Tnl(n, l) *= inv_norm[l] * std::sqrt(0.5);
       }
     }
   }
@@ -508,8 +507,8 @@ namespace gf_extension {
   void compute_overlap(
       const std::vector<alps::gf::piecewise_polynomial<T1> > &left_vectors,
       const std::vector<alps::gf::piecewise_polynomial<T2> > &right_vectors,
-      boost::multi_array<typename result_of_overlap<T1,T2>::value, 2> &results) {
-    typedef typename result_of_overlap<T1,T2>::value Tr;
+      boost::multi_array<typename result_of_overlap<T1, T2>::value, 2> &results) {
+    typedef typename result_of_overlap<T1, T2>::value Tr;
 
     const int NL = left_vectors.size();
     const int NR = right_vectors.size();
@@ -528,13 +527,13 @@ namespace gf_extension {
       }
     }
 
-    for (int n = 0; n < NL ; ++n) {
+    for (int n = 0; n < NL; ++n) {
       if (k1 != left_vectors[n].order()) {
         throw std::runtime_error("Left vectors must be piecewise polynomials of the same order.");
       }
     }
 
-    for (int n = 0; n < NR ; ++n) {
+    for (int n = 0; n < NR; ++n) {
       if (k2 != right_vectors[n].order()) {
         throw std::runtime_error("Right vectors must be piecewise polynomials of the same order.");
       }
@@ -546,7 +545,7 @@ namespace gf_extension {
       }
     }
 
-    std::vector<double> x_min_power(k1+k2+2), dx_power(k1+k2+2);
+    std::vector<double> x_min_power(k1 + k2 + 2), dx_power(k1 + k2 + 2);
 
     Eigen::Matrix<Tr, Eigen::Dynamic, Eigen::Dynamic> mid_matrix(k1 + 1, k2 + 1);
     Eigen::Matrix<T1, Eigen::Dynamic, Eigen::Dynamic> left_matrix(NL, k1 + 1);
@@ -598,12 +597,12 @@ namespace gf_extension {
   void compute_transformation_matrix(
       const std::vector<alps::gf::piecewise_polynomial<T1> > &dst_vectors,
       const std::vector<alps::gf::piecewise_polynomial<T2> > &src_vectors,
-      boost::multi_array<typename result_of_overlap<T1,T2>::value, 2> &results) {
+      boost::multi_array<typename result_of_overlap<T1, T2>::value, 2> &results) {
     compute_overlap(dst_vectors, src_vectors, results);
 
     std::vector<double> coeff1(dst_vectors.size());
     for (int l = 0; l < dst_vectors.size(); ++l) {
-      coeff1[l] = 1.0/std::sqrt(
+      coeff1[l] = 1.0 / std::sqrt(
           static_cast<double>(
               dst_vectors[l].overlap(dst_vectors[l])
           )
@@ -612,7 +611,7 @@ namespace gf_extension {
 
     std::vector<double> coeff2(src_vectors.size());
     for (int l = 0; l < src_vectors.size(); ++l) {
-      coeff2[l] = 1.0/std::sqrt(
+      coeff2[l] = 1.0 / std::sqrt(
           static_cast<double>(
               src_vectors[l].overlap(src_vectors[l])
           )
@@ -627,15 +626,14 @@ namespace gf_extension {
   };
 
 
-
-
   /***
    * Template class transformer. Convert a GF object to a GF object of a different type.
    * Some conversion may not be safe.
    * @tparam G_DST Destination type
    * @tparam G_SRC Source type
    */
-  template<typename G_DST, typename G_SRC> class transformer {};
+  template<typename G_DST, typename G_SRC>
+  class transformer {};
 
   template<typename S, typename M2, typename M3>
   using itime_three_index_gf = alps::gf::three_index_gf<S, alps::gf::itime_mesh, M2, M3>;
@@ -648,18 +646,18 @@ namespace gf_extension {
 
   /// Numerical mesh to imaginary time (three-index gf)
   template<typename S, typename M2, typename M3>
-  class transformer<itime_three_index_gf<S,M2,M3>, nmesh_three_index_gf<S,M2,M3> > {
-    using gt_dst = itime_three_index_gf<S,M2,M3>;
-    using gt_src = nmesh_three_index_gf<S,M2,M3>;
+  class transformer<itime_three_index_gf<S, M2, M3>, nmesh_three_index_gf<S, M2, M3> > {
+    using gt_dst = itime_three_index_gf<S, M2, M3>;
+    using gt_src = nmesh_three_index_gf<S, M2, M3>;
 
     using nmesh_type = alps::gf::numerical_mesh<double>;
     using index_type2 = typename M2::index_type;
     using index_type3 = typename M3::index_type;
 
    public:
-    transformer(int ntau, const alps::gf::numerical_mesh<double>& nmesh) : ntau_(ntau), nmesh_(nmesh) {};
+    transformer(int ntau, const alps::gf::numerical_mesh<double> &nmesh) : ntau_(ntau), nmesh_(nmesh) {};
 
-    gt_dst operator()(const gt_src& g_in) const {
+    gt_dst operator()(const gt_src &g_in) const {
       if (nmesh_ != g_in.mesh1()) {
         throw std::runtime_error("Given Green's function object has an incompatible numerical mesh.");
       }
@@ -672,13 +670,13 @@ namespace gf_extension {
 
       std::vector<double> coeff(dim_in);
       for (int il = 0; il < dim_in; ++il) {
-        coeff[il] = sqrt(2.0/g_in.mesh1().basis_function(il).squared_norm())/beta;
+        coeff[il] = sqrt(2.0 / g_in.mesh1().basis_function(il).squared_norm()) / beta;
       }
 
       std::vector<double> vals(dim_in);
 
-      for (int itau = 0; itau < ntau_ ; ++itau) {
-        double tau = itau * (beta / (ntau_-1) );
+      for (int itau = 0; itau < ntau_; ++itau) {
+        double tau = itau * (beta / (ntau_ - 1));
         double x = 2 * tau / beta - 1.0;
 
         for (int il = 0; il < dim_in; ++il) {
@@ -711,9 +709,9 @@ namespace gf_extension {
 
   /// Numerical mesh to Matsubara mesh (three-index gf)
   template<typename S, typename M2, typename M3>
-  class transformer<omega_three_index_gf<std::complex<double>,M2,M3>, nmesh_three_index_gf<S,M2,M3> > {
-    using gt_dst = omega_three_index_gf<std::complex<double>,M2,M3>;
-    using gt_src = nmesh_three_index_gf<S,M2,M3>;
+  class transformer<omega_three_index_gf<std::complex<double>, M2, M3>, nmesh_three_index_gf<S, M2, M3> > {
+    using gt_dst = omega_three_index_gf<std::complex<double>, M2, M3>;
+    using gt_src = nmesh_three_index_gf<S, M2, M3>;
 
     using nmesh_type = alps::gf::numerical_mesh<double>;
     using index_type2 = typename M2::index_type;
@@ -722,27 +720,27 @@ namespace gf_extension {
     static constexpr int num_index = 3;
 
    public:
-    transformer(int niw, const alps::gf::numerical_mesh<double>& nmesh) : niw_(niw), nmesh_(nmesh), Tnl_(0,0) {
+    transformer(int niw, const alps::gf::numerical_mesh<double> &nmesh) : niw_(niw), nmesh_(nmesh), Tnl_(0, 0) {
 
       const int nl = nmesh_.extent();
 
-      Tnl_ = Eigen::Tensor<std::complex<double>,2>(niw_, nl);
+      Tnl_ = Eigen::Tensor<std::complex<double>, 2>(niw_, nl);
       double beta = nmesh_.beta();
 
       std::vector<pp_type> basis_functions(nl);
-      for (int l=0; l < nl; ++l) {
+      for (int l = 0; l < nl; ++l) {
         basis_functions[l] = nmesh_.basis_function(l);
       }
 
       compute_transformation_matrix_to_matsubara(
-          0, niw_-1,
+          0, niw_ - 1,
           nmesh_.statistics(),
           basis_functions,
           Tnl_
       );
     }
 
-    gt_dst operator()(const gt_src& g_in) const {
+    gt_dst operator()(const gt_src &g_in) const {
       if (nmesh_ != g_in.mesh1()) {
         throw std::runtime_error("Given Green's function object has an incompatible numerical mesh.");
       }
@@ -754,7 +752,7 @@ namespace gf_extension {
       Eigen::Tensor<std::complex<double>, num_index> data_l(dim_in, dim2, dim3);
       detail::copy_to_tensor(g_in.data(), data_l);
 
-      std::array<Eigen::IndexPair<int>, 1> product_dims = { Eigen::IndexPair<int>(1, 0) };
+      std::array<Eigen::IndexPair<int>, 1> product_dims = {Eigen::IndexPair<int>(1, 0)};
       Eigen::Tensor<std::complex<double>, num_index> data_omega = Tnl_.contract(data_l, product_dims);
 
       gt_dst g_out(alps::gf::matsubara_positive_mesh(g_in.mesh1().beta(), niw_), g_in.mesh2(), g_in.mesh3());
@@ -776,15 +774,15 @@ namespace gf_extension {
    private:
     int niw_;
     nmesh_type nmesh_;
-    Eigen::Tensor<std::complex<double>,2> Tnl_;
+    Eigen::Tensor<std::complex<double>, 2> Tnl_;
   };
 
   template<typename T>
   Eigen::Tensor<std::complex<T>, 3>
   compute_w_tensor(
       const std::vector<long> &n_vec,
-      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_f,
-      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_b) {
+      const std::vector<alps::gf::piecewise_polynomial<T>> &basis_f,
+      const std::vector<alps::gf::piecewise_polynomial<T>> &basis_b) {
     using dcomplex = std::complex<double>;
 
     const int dim_f = basis_f.size();
@@ -804,22 +802,22 @@ namespace gf_extension {
 
     Eigen::Tensor<dcomplex, 2> integral(n_vec.size(), prods.size());
     const int b_size = 500;
-    for (int b = 0; b < n_vec.size()/b_size+1; ++b) {
+    for (int b = 0; b < n_vec.size() / b_size + 1; ++b) {
       auto n_start = b * b_size;
-      auto n_last = std::min((b+1) * b_size-1, (int) n_vec.size()-1);
+      auto n_last = std::min((b + 1) * b_size - 1, (int) n_vec.size() - 1);
       if (n_start > n_last) {
         continue;
       }
 
       std::vector<double> w_batch;
-      for (int n=n_start; n<=n_last; ++n) {
+      for (int n = n_start; n <= n_last; ++n) {
         w_batch.push_back(w[n]);
       }
-      Eigen::Tensor<dcomplex,2> sub;
+      Eigen::Tensor<dcomplex, 2> sub;
       alps::gf_extension::compute_integral_with_exp(w_batch, prods, sub);
-      for (int n=n_start; n<=n_last; ++n) {
-        for (int j=0; j<prods.size(); ++j) {
-          integral(n,j) = sub(n-n_start,j);
+      for (int n = n_start; n <= n_last; ++n) {
+        for (int j = 0; j < prods.size(); ++j) {
+          integral(n, j) = sub(n - n_start, j);
         }
       }
     }
@@ -835,91 +833,222 @@ namespace gf_extension {
     return w_tensor;
   }
 
+  inline
+  void construct_log_mesh(long max_n,
+                            int max_n_exact_sum,
+                            double ratio_sum,
+                            std::vector<long>& n_vec,
+                            std::vector<double>& weight) {
+    n_vec.resize(0);
+    weight.resize(0);
+
+    long n_start = 0, dn = 1;
+    while (n_start < max_n) {
+      long n_mid = (long) std::round(0.5 * (n_start + n_start + dn - 1));
+      n_vec.push_back(n_mid);
+      weight.push_back(1. * dn);
+
+      n_start += dn;
+      if (n_start < max_n_exact_sum) {
+        dn = 1;
+      } else {
+        dn = std::max(long(dn * ratio_sum), dn + 1);
+      }
+    }
+  }
+
   template<typename T>
-  Eigen::Tensor<T,6>
+  Eigen::Tensor<T, 6>
   compute_C_tensor(
-      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_f,
-      const std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
-      double ratio_sum=1.02,
-      int max_n_exact_sum=200
+      const std::vector<alps::gf::piecewise_polynomial<T>> &basis_f,
+      const std::vector<alps::gf::piecewise_polynomial<T>> &basis_b,
+      double ratio_sum = 1.02,
+      int max_n_exact_sum = 200
   ) {
     using dcomplex = std::complex<double>;
     namespace ge = alps::gf_extension;
-
-    Eigen::Tensor<double,6> C_tensor;
 
     const int dim_f = basis_f.size();
     const int dim_b = basis_b.size();
 
     //Construct a mesh
-    double max_n = 1E+10;
+    long max_n = 1E+10;
     std::vector<long> n_vec;
     std::vector<double> weight_sum;
-    {
-      long n_start = 0, dn = 1;
-      double tmp = 0.0;
-      while(n_start < max_n) {
-        long n_mid = (long) std::round(0.5*(n_start + n_start + dn -1));
-        n_vec.push_back(n_mid);
-        weight_sum.push_back(1.*dn);
-
-        n_start += dn;
-        if (n_start < max_n_exact_sum) {
-          dn = 1;
-        } else {
-          dn = std::max(long(dn * ratio_sum), dn+1);
-        }
-      }
-    }
+    construct_log_mesh(max_n, max_n_exact_sum, ratio_sum, n_vec, weight_sum);
     int n_mesh = n_vec.size();
 
     //Compute w tensor
     auto w_tensor = compute_w_tensor(n_vec, basis_f, basis_b);
 
     //Compute Tnl_f
-    Eigen::Tensor<dcomplex,2> Tnl_f;
+    Eigen::Tensor<dcomplex, 2> Tnl_f;
     compute_transformation_matrix_to_matsubara(n_vec, alps::gf::statistics::FERMIONIC, basis_f, Tnl_f);
 
-    Eigen::Tensor<dcomplex,2> Tnl_b;
+    Eigen::Tensor<dcomplex, 2> Tnl_b;
     compute_transformation_matrix_to_matsubara(n_vec, alps::gf::statistics::BOSONIC, basis_b, Tnl_b);
 
-    Eigen::Tensor<dcomplex,4> left_mat(dim_f, dim_f, dim_b, n_mesh);//(l1;l2;lp3, n)
-    Eigen::Tensor<dcomplex,4> right_mat(n_mesh, dim_b, dim_f, dim_f);//(n,l3;lp1;lp2)
+    std::vector<double> sqrt_weight_sum(weight_sum);
+    for (int n = 0; n < n_mesh; ++n) {
+      sqrt_weight_sum[n] = std::sqrt(weight_sum[n]);
+    }
 
+    Eigen::Tensor<dcomplex, 4> left_mat(dim_f, dim_f, dim_b, n_mesh);//(l1;l2;lp3, n)
     for (int n = 0; n < n_mesh; ++n) {
       for (int lp3 = 0; lp3 < dim_b; ++lp3) {
         for (int l2 = 0; l2 < dim_f; ++l2) {
+          auto sign = l2%2==0 ? -1.0 : 1.0;
           for (int l1 = 0; l1 < dim_f; ++l1) {
-            left_mat(l1, l2, lp3, n) = std::conj(w_tensor(n, lp3, l1) * Tnl_f(n, l2));
+            left_mat(l1, l2, lp3, n) = sign * std::conj(w_tensor(n, lp3, l1) * Tnl_f(n, l2)) * sqrt_weight_sum[n];
           }
         }
       }
     }
 
-    for (int lp2 = 0; lp2 < dim_f; ++lp2) {
-      for (int lp1 = 0; lp1 < dim_f; ++lp1) {
-        for (int l3 = 0; l3 < dim_b; ++l3) {
-          for (int n = 0; n < n_mesh; ++n) {
-            right_mat(n, l3, lp1, lp2) = w_tensor(n, l3, lp1) * Tnl_f(n, lp2) * weight_sum[n];
-          }
-        }
-      }
-    }
+    auto right_mat {left_mat.conjugate()};
 
-    std::array<Eigen::IndexPair<int>,1> product_dims = { Eigen::IndexPair<int>(3, 0)};
-
-    C_tensor = (2*left_mat.contract(right_mat, product_dims).real()).shuffle(
-        std::array<int,6>{{0,1,3,4,5,2}}
+    //left_mat(l1, l2, lp3, n)
+    //right_mat(lp1, lp2, l3, n)
+    //contract => (l1, l2, lp3, lp1, lp2, l3)
+    //shuffle => (l1, l2, l3, lp1, lp2, lp3)
+    std::array<Eigen::IndexPair<int>, 1> product_dims = {Eigen::IndexPair<int>(3, 3)};
+    return (2 * left_mat.contract(right_mat, product_dims).real()).shuffle(
+        std::array<int, 6>{{0, 1, 5, 3, 4, 2}}
     );
 
-    for (int lp3 = 0; lp3 < dim_b; ++lp3) {
-      for (int lp2 = 0; lp2 < dim_f; ++lp2) {
-        for (int lp1 = 0; lp1 < dim_f; ++lp1) {
-          for (int l3 = 0; l3 < dim_b; ++l3) {
-            for (int l2 = 0; l2 < dim_f; ++l2) {
-              auto sign = -((l2 + lp2) % 2 == 0 ? 1.0 : -1.0);
-              for (int l1 = 0; l1 < dim_f; ++l1) {
-                C_tensor(l1, l2, l3, lp1, lp2, lp3) *= sign;
+  }
+
+  inline
+  Eigen::Tensor<std::complex<double>, 2>
+  compute_Tnl(const std::vector<long>& n_vec,
+              const alps::gf::numerical_mesh<double>& nmesh) {
+    Eigen::Tensor<std::complex<double>, 2> Tnl;
+
+    int nl = nmesh.extent();
+
+    std::vector<alps::gf::piecewise_polynomial<double>> basis_functions(nl);
+    for (int l = 0; l < nl; ++l) {
+      basis_functions[l] = nmesh.basis_function(l);
+    }
+
+    compute_transformation_matrix_to_matsubara( n_vec, nmesh.statistics(), basis_functions, Tnl);
+
+    return Tnl;
+  }
+
+  inline
+  Eigen::Tensor<std::complex<double>, 2>
+  compute_Tnl(int n_min, int n_max, const alps::gf::numerical_mesh<double>& nmesh) {
+    Eigen::Tensor<std::complex<double>, 2> Tnl;
+
+    //double beta = nmesh.beta();
+    int nl = nmesh.extent();
+
+    std::vector<alps::gf::piecewise_polynomial<double>> basis_functions(nl);
+    for (int l = 0; l < nl; ++l) {
+      basis_functions[l] = nmesh.basis_function(l);
+    }
+
+    compute_transformation_matrix_to_matsubara(n_min, n_max, nmesh.statistics(), basis_functions, Tnl);
+
+    return Tnl;
+  }
+
+  /**
+   * Compute a G2 bubule of Hartree type
+   * @tparam T       Scalar type of Gl
+   * @param Gl       G1
+   * @param mesh_f   Fermionic mesh of G2
+   * @param mesh_b   Bosonic mesh of G2
+   * @return         G2 bubble of Hartree type
+   * All numerical_mesh must be ir basis sets with the same value of Lambda
+   */
+  template<typename T>
+  alps::gf::seven_index_gf<
+      std::complex<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh>
+  compute_G2_bubble_H(
+      const alps::gf::three_index_gf<T,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& Gl,
+      const alps::gf::numerical_mesh<double>& mesh_f,
+      const alps::gf::numerical_mesh<double>& mesh_b
+  ) {
+    using G2_t = alps::gf::seven_index_gf<
+        std::complex<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh>;
+
+    double beta = Gl.mesh1().beta();
+
+    if (mesh_f.beta() != beta || mesh_b.beta() != beta) {
+      throw std::invalid_argument("All mesh must have the same value of beta.");
+    }
+    if (Gl.mesh2() != Gl.mesh3()) {
+      throw std::invalid_argument("mesh2 and mesh3 of Gl must be identical.");
+    }
+    if (Gl.mesh1().statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh1 of Gl must be fermionic.");
+    }
+    if (mesh_f.statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh_f must be fermionic.");
+    }
+    if (mesh_b.statistics() != alps::gf::statistics::BOSONIC) {
+      throw std::invalid_argument("mesh_b must be bosonic.");
+    }
+
+    G2_t g2(mesh_f, mesh_f, mesh_b, Gl.mesh2(), Gl.mesh2(), Gl.mesh2(), Gl.mesh2());
+
+    int nf = Gl.mesh2().extent();
+    int nl_f_G2 = mesh_f.extent();
+    int nl_b_G2 = mesh_b.extent();
+    int nl_G1 = Gl.mesh1().extent();
+
+    for (int l=0; l<std::min(nl_G1,nl_f_G2); ++l) {
+      if (!(mesh_f.basis_function(l) == Gl.mesh1().basis_function(l))) {
+        throw std::invalid_argument("mesh_f and Gl are not consistent.");
+      }
+    }
+
+    if (nl_G1 < nl_f_G2) {
+      throw std::invalid_argument("Too few fermionic basis functions for G1.");
+    }
+
+    //compute T_nl^B for n=0.
+    auto Tnl_b = compute_Tnl(0, 0, mesh_b);
+
+    using nindex_t = alps::gf::numerical_mesh<double>::index_type;
+    using iindex_t = alps::gf::index_mesh::index_type;
+
+    for (int f4 = 0; f4 < nf; ++f4) {
+      for (int f3 = 0; f3 < nf; ++f3) {
+        for (int f2 = 0; f2 < nf; ++f2) {
+          for (int f1 = 0; f1 < nf; ++f1) {
+            for (int l3=0; l3 < nl_b_G2; ++l3) {
+              for (int l2=0; l2 < nl_f_G2; ++l2) {
+                auto sign = l2%2 == 0 ? -1.0 : 1.0;
+                for (int l1=0; l1 < nl_f_G2; ++l1) {
+                  g2(nindex_t(l1),
+                     nindex_t(l2),
+                     nindex_t(l3),
+                     iindex_t(f1),
+                     iindex_t(f2),
+                     iindex_t(f3),
+                     iindex_t(f4)) = beta * sign * std::conj(Tnl_b(0,l3))
+                      * Gl(nindex_t(l1), iindex_t(f1), iindex_t(f2))
+                      * Gl(nindex_t(l2), iindex_t(f3), iindex_t(f4));
+                  //std::cout << l1 << " " << l2 << " " << l3 << " " << std::abs(g2(nindex_t(l1), nindex_t(l2), nindex_t(l3), iindex_t(f1), iindex_t(f2), iindex_t(f3), iindex_t(f4))) << std::endl;
+                  //std::cout << l1 << " " << l2 << " " << l3 << " " << std::conj(Tnl_b(0,l3)) << std::endl;
+                }
               }
             }
           }
@@ -927,9 +1056,13 @@ namespace gf_extension {
       }
     }
 
-    return C_tensor;
+    return g2;
   }
 
+  /***
+   * Transform a Hatree-type G2 object to a Fock-type G2
+   * @tparam SEVEN_INDEX_GF Type of G2
+   */
   template<typename SEVEN_INDEX_GF>
   class transformer_Hartree_to_Fock {
     using M4 = typename SEVEN_INDEX_GF::mesh4_type;
@@ -989,10 +1122,13 @@ namespace gf_extension {
 
       Eigen::Tensor<dcomplex,7> tmp = C_tensor_.contract(G2_H_map, product_dims);
 
-      std::array<int,7> shuffle {{2, 1, 0, 3, 4, 5, 6}};
+      //at this point, the indices are (l1, l2, l3, f4, f3, f2, f1)
+      //This will be transposed into (f2, f3, f4, f1, l3, l2, l1).
+
+      std::array<int,7> shuffle {{5, 4, 3, 6, 2, 1, 0}};
       Eigen::Tensor<dcomplex,7> tmp2 = tmp.shuffle(shuffle);
 
-      G2_F_map = tmp;
+      G2_F_map = tmp2;
 
       return G2_F;
     }
