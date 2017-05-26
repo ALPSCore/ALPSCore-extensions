@@ -67,6 +67,157 @@ namespace gf_extension {
       tensor = tensor_tmp2.shuffle(shuffle);
     }
 
+    template<
+        typename T,
+        typename M1,
+        typename M2,
+        typename M3>
+    void copy_from_tensor(
+        const Eigen::Tensor<T,3>& data,
+        alps::gf::three_index_gf<T,M1,M2,M3>& g) {
+
+      assert(data.dimension(0) == g.mesh1().extent());
+      assert(data.dimension(1) == g.mesh2().extent());
+      assert(data.dimension(2) == g.mesh3().extent());
+
+      for (int i1 = 0; i1 < g.mesh1().extent(); ++i1) {
+        for (int i2 = 0; i2 < g.mesh2().extent(); ++i2) {
+          for (int i3 = 0; i3 < g.mesh3().extent(); ++i3) {
+            g(typename M1::index_type(i1),
+              typename M2::index_type(i2),
+              typename M3::index_type(i3)) = data(i1, i2, i3);
+          }
+        }
+      }
+    }
+
+    template<
+        typename T,
+        typename M1,
+        typename M2,
+        typename M3>
+    void copy_to_tensor(
+        Eigen::Tensor<T,3>& data,
+        const alps::gf::three_index_gf<T,M1,M2,M3>& g) {
+
+      data = Eigen::Tensor<T,3>(
+          g.mesh1().extent(),
+          g.mesh2().extent(),
+          g.mesh3().extent());
+
+      for (int i1 = 0; i1 < g.mesh1().extent(); ++i1) {
+        for (int i2 = 0; i2 < g.mesh2().extent(); ++i2) {
+          for (int i3 = 0; i3 < g.mesh3().extent(); ++i3) {
+            data(i1, i2, i3) =
+              g(typename M1::index_type(i1),
+                typename M2::index_type(i2),
+                typename M3::index_type(i3));
+          }
+        }
+      }
+    }
+
+    template<
+        typename T,
+        typename M1,
+        typename M2,
+        typename M3,
+        typename M4,
+        typename M5,
+        typename M6,
+        typename M7>
+    void copy_from_tensor(
+        const Eigen::Tensor<T,7>& data,
+        alps::gf::seven_index_gf<T,M1,M2,M3,M4,M5,M6,M7>& g) {
+
+      assert(data.dimension(0) == g.mesh1().extent());
+      assert(data.dimension(1) == g.mesh2().extent());
+      assert(data.dimension(2) == g.mesh3().extent());
+      assert(data.dimension(3) == g.mesh4().extent());
+      assert(data.dimension(4) == g.mesh5().extent());
+      assert(data.dimension(5) == g.mesh6().extent());
+      assert(data.dimension(6) == g.mesh7().extent());
+
+      for (int i1 = 0; i1 < g.mesh1().extent(); ++i1) {
+      for (int i2 = 0; i2 < g.mesh2().extent(); ++i2) {
+      for (int i3 = 0; i3 < g.mesh3().extent(); ++i3) {
+      for (int i4 = 0; i4 < g.mesh4().extent(); ++i4) {
+      for (int i5 = 0; i5 < g.mesh5().extent(); ++i5) {
+      for (int i6 = 0; i6 < g.mesh6().extent(); ++i6) {
+      for (int i7 = 0; i7 < g.mesh7().extent(); ++i7) {
+        g(typename M1::index_type(i1),
+          typename M2::index_type(i2),
+          typename M3::index_type(i3),
+          typename M4::index_type(i4),
+          typename M5::index_type(i5),
+          typename M6::index_type(i6),
+          typename M7::index_type(i7)) = data(i1, i2, i3, i4, i5, i6, i7);
+      }
+      }
+      }
+      }
+      }
+      }
+      }
+    }
+
+    template<
+        typename T,
+        typename M1,
+        typename M2,
+        typename M3,
+        typename M4,
+        typename M5,
+        typename M6,
+        typename M7>
+    void copy_to_tensor(
+        Eigen::Tensor<T,7>& data,
+        const alps::gf::seven_index_gf<T,M1,M2,M3,M4,M5,M6,M7>& g) {
+
+      data = Eigen::Tensor<T,7>(
+          g.mesh1().extent(),
+          g.mesh2().extent(),
+          g.mesh3().extent(),
+          g.mesh4().extent(),
+          g.mesh5().extent(),
+          g.mesh6().extent(),
+          g.mesh7().extent()
+      );
+
+      for (int i1 = 0; i1 < g.mesh1().extent(); ++i1) {
+        for (int i2 = 0; i2 < g.mesh2().extent(); ++i2) {
+          for (int i3 = 0; i3 < g.mesh3().extent(); ++i3) {
+            for (int i4 = 0; i4 < g.mesh4().extent(); ++i4) {
+              for (int i5 = 0; i5 < g.mesh5().extent(); ++i5) {
+                for (int i6 = 0; i6 < g.mesh6().extent(); ++i6) {
+                  for (int i7 = 0; i7 < g.mesh7().extent(); ++i7) {
+                    data(i1, i2, i3, i4, i5, i6, i7) =
+                      g(typename M1::index_type(i1),
+                        typename M2::index_type(i2),
+                        typename M3::index_type(i3),
+                        typename M4::index_type(i4),
+                        typename M5::index_type(i5),
+                        typename M6::index_type(i6),
+                        typename M7::index_type(i7));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    template<typename T>
+    std::vector<alps::gf::piecewise_polynomial<T>>
+    extract_basis_functions(const alps::gf::numerical_mesh<T>& mesh) {
+      std::vector<alps::gf::piecewise_polynomial<T>> r;
+      for (int b=0; b<mesh.extent(); ++b){
+        r.push_back(mesh.basis_function(b));
+      }
+      return r;
+    }
+
     /// Construct piecewise polynomials representing Matsubara basis functions: exp(-i w_n tau) for n >= 0.
     /// For fermionic cases, w_n = (2*n+1)*pi/beta.
     /// For bosonci cases, w_n = (2*n)*pi/beta.
@@ -912,7 +1063,7 @@ namespace gf_extension {
     //contract => (l1, l2, lp3, lp1, lp2, l3)
     //shuffle => (l1, l2, l3, lp1, lp2, lp3)
     std::array<Eigen::IndexPair<int>, 1> product_dims = {Eigen::IndexPair<int>(3, 3)};
-    return (2 * left_mat.contract(right_mat, product_dims).real()).shuffle(
+    return (-2 * left_mat.contract(right_mat, product_dims).real()).shuffle(
         std::array<int, 6>{{0, 1, 5, 3, 4, 2}}
     );
 
@@ -1055,6 +1206,145 @@ namespace gf_extension {
         }
       }
     }
+
+    return g2;
+  }
+
+  /**
+   * Compute a G2 bubule of Fock type
+   * @tparam T       Scalar type of Gl
+   * @param Gl       G1
+   * @param mesh_f   Fermionic mesh of G2
+   * @param mesh_b   Bosonic mesh of G2
+   * @return         G2 bubble of Hartree type
+   * All numerical_mesh must be ir basis sets with the same value of Lambda
+   */
+  template<typename T>
+  alps::gf::seven_index_gf<
+      std::complex<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh>
+  compute_G2_bubble_F(
+      const alps::gf::three_index_gf<T,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& Gl,
+      const alps::gf::numerical_mesh<double>& mesh_f,
+      const alps::gf::numerical_mesh<double>& mesh_b
+  ) {
+    using G2_t = alps::gf::seven_index_gf<
+        std::complex<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh>;
+
+    double beta = Gl.mesh1().beta();
+
+    if (mesh_f.beta() != beta || mesh_b.beta() != beta) {
+      throw std::invalid_argument("All mesh must have the same value of beta.");
+    }
+    if (Gl.mesh2() != Gl.mesh3()) {
+      throw std::invalid_argument("mesh2 and mesh3 of Gl must be identical.");
+    }
+    if (Gl.mesh1().statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh1 of Gl must be fermionic.");
+    }
+    if (mesh_f.statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh_f must be fermionic.");
+    }
+    if (mesh_b.statistics() != alps::gf::statistics::BOSONIC) {
+      throw std::invalid_argument("mesh_b must be bosonic.");
+    }
+
+    G2_t g2(mesh_f, mesh_f, mesh_b, Gl.mesh2(), Gl.mesh2(), Gl.mesh2(), Gl.mesh2());
+
+    int nf = Gl.mesh2().extent();
+    int nl_f_G2 = mesh_f.extent();
+    int nl_b_G2 = mesh_b.extent();
+    int nl_G1 = Gl.mesh1().extent();
+
+    for (int l=0; l<std::min(nl_G1,nl_f_G2); ++l) {
+      if (!(mesh_f.basis_function(l) == Gl.mesh1().basis_function(l))) {
+        throw std::invalid_argument("mesh_f and Gl are not consistent.");
+      }
+    }
+
+    if (nl_G1 < nl_f_G2) {
+      throw std::invalid_argument("Too few fermionic basis functions for G1.");
+    }
+
+    //Construct a mesh
+    long max_n = 1E+10;
+    int max_n_exact_sum = 200;
+    double ratio_sum = 1.02;
+    std::vector<long> n_vec;
+    std::vector<double> weight_sum;
+    construct_log_mesh(max_n, max_n_exact_sum, ratio_sum, n_vec, weight_sum);
+    int n_mesh = n_vec.size();
+
+    //Compute w tensor
+    auto basis_f = detail::extract_basis_functions(mesh_f);
+    auto basis_b = detail::extract_basis_functions(mesh_b);
+    auto w_tensor = compute_w_tensor(n_vec, basis_f, basis_b);
+
+    //Compute Tnl
+    auto Tnl_f = compute_Tnl(n_vec, g2.mesh1());
+
+    Eigen::Tensor<std::complex<double>,3> left_tensor(nl_f_G2, nl_f_G2, n_mesh);
+    for (int n=0; n<n_mesh; ++n) {
+      for (int l2=0; l2<nl_f_G2; ++l2) {
+        auto sign = l2%2==0 ? 1.0 : -1.0;
+        for (int l1=0; l1<nl_f_G2; ++l1) {
+          left_tensor(l1, l2, n) = sign * std::conj(Tnl_f(n, l1) * Tnl_f(n, l2)) * weight_sum[n] * beta;
+        }
+      }
+    }
+
+    Eigen::Tensor<std::complex<double>,4> right_tensor(n_mesh, nl_b_G2, nl_f_G2, nl_f_G2);
+    for (int n=0; n<n_mesh; ++n) {
+      for (int l3=0; l3<nl_b_G2; ++l3) {
+        for (int lp1=0; lp1<nl_f_G2; ++lp1) {
+          for (int lp2=0; lp2<nl_f_G2; ++lp2) {
+            right_tensor(n, l3, lp1, lp2) = Tnl_f(n,lp2) * w_tensor(n, l3, lp1);
+          }
+        }
+      }
+    }
+
+    std::array<Eigen::IndexPair<int>,1> product_dims {{ Eigen::IndexPair<int>(2,0) }};
+
+    Eigen::Tensor<std::complex<double>,5> trans_tensor
+        = 2*left_tensor.contract(right_tensor, product_dims).real().cast<std::complex<double>>();
+
+    Eigen::Tensor<std::complex<double>,3> data_G1;
+    detail::copy_to_tensor(data_G1, Gl);
+    Eigen::Tensor<std::complex<double>,3> data_G1_slice = data_G1.slice(
+        std::array<long,3>{{0,0,0}},
+        std::array<long,3>{{nl_f_G2, data_G1.dimension(1), data_G1.dimension(2)}}
+    );
+
+    //tmp1: (l1, l2, l3, lp1, lp2) * (lp1, i, l) => (l1, l2, l3, lp2, i, l)
+    auto tmp1 = trans_tensor.contract(
+        data_G1_slice,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(3,0)}}
+    );
+
+    //tmp2: (l1, l2, l3, lp2, i, l) * (lp2, k, j) => (l1, l2, l3, i, l, k, j)
+    auto tmp2 = tmp1.contract(
+        data_G1_slice,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(3,0)}}
+    );
+
+    //tmp3: (l1, l2, l3, i, j, k, l)
+    Eigen::Tensor<std::complex<double>,7> tmp3 = tmp2.shuffle(std::array<int,7>{{0, 1, 2,  3, 6, 5, 4}});
+
+    detail::copy_from_tensor(tmp3, g2);
 
     return g2;
   }

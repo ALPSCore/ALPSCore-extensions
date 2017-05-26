@@ -12,13 +12,13 @@ namespace ge = alps::gf_extension;
 class GfTransformTest : public testing::Test {
  protected:
   typedef alps::gf::piecewise_polynomial<double> pp_type;
-  using gl_type = ge::nmesh_three_index_gf<double, g::index_mesh, g::index_mesh>;
-  using complex_gl_type = ge::nmesh_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
-  using gtau_type = ge::itime_three_index_gf<double, g::index_mesh, g::index_mesh>;
+  using gl_type = ge::nmesh_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
+  //using complex_gl_type = ge::nmesh_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
+  using gtau_type = ge::itime_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
   using gomega_type = ge::omega_three_index_gf<std::complex<double>, g::index_mesh, g::index_mesh>;
 
-  double Lambda = 300.0;
-  double beta = 100.0;
+  double Lambda = 150.0;
+  double beta = 50.0;
   int max_dim = 100;
   alps::gf_extension::fermionic_ir_basis basis;
   alps::gf_extension::bosonic_ir_basis basis_b;
@@ -26,8 +26,12 @@ class GfTransformTest : public testing::Test {
   gtau_type Gtau;
   gomega_type Gomega;
 
+  double weight_p = 0.8;
+  double weight_m = 1.0 - weight_p;
+
   double compute_gx(double x) const {
-    return std::exp(-0.5*beta)*std::cosh(-0.5*beta*x);
+    //return -std::exp(-0.5*beta)*std::cosh(-0.5*beta*x);
+    return -std::exp(-0.5*beta)*(weight_m * std::exp(0.5*beta*x) + weight_p * std::exp(-0.5*beta*x) );
   }
 
   double compute_gtau(double tau) const {
@@ -37,7 +41,7 @@ class GfTransformTest : public testing::Test {
   std::complex<double> compute_gomega(int n) const {
     const std::complex<double> zi(0.0, 1.0);
     double wn = (2.*n+1)*M_PI/beta;
-    return - 0.5/(zi*wn - 1.0) - 0.5/(zi*wn + 1.0);
+    return weight_p/(zi*wn - 1.0) + weight_m/(zi*wn + 1.0);
   }
 
   GfTransformTest() :
@@ -142,44 +146,119 @@ TEST_F(GfTransformTest, IRtoMatsubara) {
 TEST_F(GfTransformTest, BubbleH) {
   int nl_f = 10;
   int nl_b = 20;
+  const auto i0 = g::index_mesh::index_type(0);
+  const auto i1 = g::index_mesh::index_type(1);
 
+  gl_type Gl_multi_orb(Gl.mesh1(), alps::gf::index_mesh(2), alps::gf::index_mesh(2));
+
+  for (int l=0; l<Gl.mesh1().extent(); ++l) {
+    auto sign = l%2==0 ? 1.0 : -1.0;
+    auto nil = alps::gf::numerical_mesh<double>::index_type(l);
+
+    Gl_multi_orb(nil, i0, i0) = Gl_multi_orb(nil, i1, i1) = Gl(nil, i0, i0);
+    //flip tau dependence for down component
+    Gl_multi_orb(nil, i1, i1) *= sign;
+
+    //off diagonal part
+    //this breaks the zero sum rule and this does not matter in this test.
+    Gl_multi_orb(nil, i1, i0) = Gl_multi_orb(nil, i0, i1) = 0.1 * Gl(nil, i0, i0);
+  }
+
+  std::cout << " A " << std::endl;
   auto g2_H = alps::gf_extension::compute_G2_bubble_H(
-      Gl,
+      Gl_multi_orb,
       basis.construct_mesh(beta, nl_f),
       basis_b.construct_mesh(beta, nl_b)
   );
 
   using nit = alps::gf::numerical_mesh<double>::index_type;
 
-  const auto i0 = g::index_mesh::index_type(0);
   ASSERT_TRUE(nl_b == g2_H.mesh3().extent());
   ASSERT_TRUE(nl_f == g2_H.mesh1().extent());
 
   //check if T0l^B drop to sufficiently small values.
   double max_val = 0;
-  for (int l2=0; l2<nl_f; ++l2) {
-    for (int l1 = 0; l1 < nl_f; ++l1) {
-      max_val = std::max(max_val, std::abs(g2_H(nit(l1),nit(l2),nit(nl_b-1),i0,i0,i0,i0)));
+  for (int f1=0; f1 < 2; ++f1) {
+    for (int f2=0; f2 < 2; ++f2) {
+      for (int f3 = 0; f3 < 2; ++f3) {
+        for (int f4 = 0; f4 < 2; ++f4) {
+
+          for (int l2=0; l2<nl_f; ++l2) {
+            for (int l1 = 0; l1 < nl_f; ++l1) {
+              max_val = std::max(max_val, std::abs(
+                  g2_H(nit(l1),nit(l2),nit(nl_b-1),
+                       alps::gf::index_mesh::index_type(f1),
+                       alps::gf::index_mesh::index_type(f2),
+                       alps::gf::index_mesh::index_type(f3),
+                       alps::gf::index_mesh::index_type(f4)
+                  )
+              ));
+              //std::cout << l1 << " " << l2 << " " << nl_b - 1 << std::endl;
+              //std::cout << f1 << " " << f2 << " " << f3 << " " << f4 << std::endl;
+              //ASSERT_TRUE(max_val < 0.1);
+              //<< std::abs(g2_H(nit(l1),nit(l2),nit(nl_b-1),i0,i0,i0,i0)) << " "
+              //<< std::abs(g2_H(nit(l1),nit(l2),nit(0),i0,i0,i0,i0)) << std::endl;
+            }
+          }
+
+        }
+      }
     }
   }
-  EXPECT_TRUE(max_val < 1e-10);
+  std::cout << "max_val" << max_val << std::endl;
+  ASSERT_TRUE(max_val < 0.1);
+
+  //for (int l3 = 0; l3 < nl_b; ++l3) {
+    //std::cout << l3 << " " << std::abs(g2_H(nit(0), nit(0), nit(l3), i0, i0, i0, i0)) << std::endl;
+  //}
+  std::cout << " B " << std::endl;
 
   alps::gf_extension::transformer_Hartree_to_Fock<decltype(g2_H)> trans(g2_H.mesh1(), g2_H.mesh3());
+  std::cout << " C " << std::endl;
 
-  auto g2_F = trans(g2_H);
-  //TODO: how to check g2_F
+  auto g2_F_t = trans(g2_H);
+  std::cout << " D " << std::endl;
 
-  /*
-  for (int l2=0; l2<nl_f; ++l2) {
+  auto g2_F = alps::gf_extension::compute_G2_bubble_F(
+      Gl_multi_orb,
+      basis.construct_mesh(beta, nl_f),
+      basis_b.construct_mesh(beta, nl_b)
+  );
+
+  double max_diff = 0.0;
+  for (int l2 = 0; l2 < nl_f; ++l2) {
     for (int l1 = 0; l1 < nl_f; ++l1) {
-      std::cout << l1 << " " << l2
-      << " " << std::abs(g2_H(nit(l1),nit(l2),nit(0),i0,i0,i0,i0))
-      << " " << std::abs(g2_F(nit(l1),nit(l2),nit(0),i0,i0,i0,i0))
-       << std::endl;
+      for (int f1=0; f1 < 2; ++f1) {
+        for (int f2 = 0; f2 < 2; ++f2) {
+          for (int f3 = 0; f3 < 2; ++f3) {
+            for (int f4 = 0; f4 < 2; ++f4) {
+              //std::cout << l1 << " " << l2
+              //<< " " << g2_F_t(nit(l1),nit(l2),nit(0),i0,i0,i0,i0).real()
+              //<< " " << g2_F(nit(l1),nit(l2),nit(0),i0,i0,i0,i0).real()
+              //<< " " << std::abs(g2_F_t(nit(l1),nit(l2),nit(0),i0,i0,i0,i0))
+              //<< " " << std::abs(g2_F(nit(l1),nit(l2),nit(0),i0,i0,i0,i0))
+              //<< std::endl;
+              auto it1 = alps::gf::index_mesh::index_type(f1);
+              auto it2 = alps::gf::index_mesh::index_type(f2);
+              auto it3 = alps::gf::index_mesh::index_type(f3);
+              auto it4 = alps::gf::index_mesh::index_type(f4);
+              max_diff = std::max(std::abs(
+                  g2_F_t(nit(l1), nit(l2), nit(0), it1, it2, it3, it4) - g2_F(nit(l1), nit(l2), nit(0), it1, it2, it3, it4)),
+                                  max_diff);
+              //std::cout << l1 << " " << l2 << " " << std::endl;
+              //std::cout << f1 << " " << f2 << " " << f3 << " " << f4 << std::endl;
+              //std::cout << g2_F_t(nit(l1), nit(l2), nit(0), it1, it2, it3, it4) << " " << g2_F(nit(l1), nit(l2), nit(0), it1, it2, it3, it4) << std::endl;
+              ASSERT_NEAR(std::abs(
+                  g2_F_t(nit(l1), nit(l2), nit(0), it1, it2, it3, it4) - g2_F(nit(l1), nit(l2), nit(0), it1, it2, it3, it4)),
+                          0.0,
+                          0.01);
+            }
+          }
+        }
+      }
     }
-    std::cout << std::endl;
   }
-  */
+  std::cout << "max_diff " << max_diff << std::endl;
 }
 
 
