@@ -529,14 +529,17 @@ namespace gf_extension {
     }
 
     std::vector<double>
-    construct_DE_sections(int Nx, double tmin=3.0) {
+    construct_DE_sections(double a, double b, int Nx, double tmin=3.0) {
+      if (b < a) {
+        throw std::runtime_error("b < a!");
+      }
       //DE mesh
       std::vector<double> section_edges_DE(Nx);
       double dt = 2 * tmin / (Nx - 1);
       for (int it = 0; it < Nx; ++it) {
         double t = dt * it - tmin;
         double x = std::tanh(0.5 * M_PI * std::sinh(t));
-        section_edges_DE[it] = x;
+        section_edges_DE[it] = (b-a)*(x+1.0)/2 + a;
       }
       return section_edges_DE;
     }
@@ -547,42 +550,36 @@ namespace gf_extension {
         const alps::gf::three_index_gf<std::complex<double>,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& G1,
         std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
         int dim_f_G2,
-        int n_gl,
-        int Nx=1000
+        int Nx = 100,
+        int Nxp = 100
     ) {
       int dim_f_G1 = G1.mesh1().extent();
       auto basis_f = detail::extract_basis_functions(G1.mesh1());
       int dim_b_G2 = basis_b.size();
       double eps = 1e-12;
+      int n_gl = 3;
 
       //auto section_edges_x = split_sections(construct_mesh_from_zeros(basis_f.back()), n_div);
       auto section_edges_x = construct_mesh_from_zeros(basis_f.back());
       auto section_edges_f = section_edges_x;
       //auto section_edges_f_dense = split_sections(section_edges_x, 10);
 
-      //DE mesh
-      auto section_edges_DE = construct_DE_sections(Nx);
-      /*
-      std::vector<double> section_edges_DE(Nx);
+      //DE mesh for (-1,1)
+      std::vector<double> section_edges_DE;
       {
-        double tmin = 3.0;
-        double dt = 2*tmin/(Nx-1);
-        for (int it=0; it<Nx; ++it) {
-          double t = dt*it - tmin;
-          double x = std::tanh(0.5*M_PI*std::sinh(t));
-          section_edges_DE[it] = x;
-        }
+        auto e1 = construct_DE_sections(-1.0, 0.0, Nx);
+        auto e2 = construct_DE_sections( 0.0, 1.0, Nx);
+        std::copy(e1.begin(), e1.end(), std::back_inserter(section_edges_DE));
+        std::copy(e2.begin(), e2.end(), std::back_inserter(section_edges_DE));
+        std::sort(section_edges_DE.begin(), section_edges_DE.end());
       }
-       */
 
       std::vector<double> xi_gl, w_gl;
       std::tie(xi_gl,w_gl) = integral_nodes_multi_section(section_edges_DE, n_gl);
-      //std::tie(xi_gl,w_gl) = integral_nodes_multi_section(section_edges_x, n_gl);
 
       Eigen::Tensor<T,4> C1(dim_f_G2, dim_b_G2, dim_f_G1, dim_f_G1);
       Eigen::Tensor<T,4> C1_x(dim_f_G2, dim_b_G2, dim_f_G1, dim_f_G1);
       C1.setZero();
-
 
       //Integration in each section
       for (int i=0; i<xi_gl.size(); ++i) {
@@ -596,6 +593,7 @@ namespace gf_extension {
         Eigen::Tensor<T,3> sub(dim_f_G2, dim_b_G2, dim_f_G1);
         sub.setZero();
         {
+          /*
           std::vector<double> section_edges_xp;
           std::vector<double> dxp_list {{0, -x, -x+2, -x-2}};
           for (auto xp : section_edges_f) {
@@ -627,44 +625,84 @@ namespace gf_extension {
             }
             section_edges_xp_new.push_back(1);
           }
+          */
+
+          std::vector<double> section_edges_xp_DE;
+          if (x == 0.0) {
+            section_edges_xp_DE = construct_DE_sections(-1.0, 1.0, Nx);
+          } else {
+            double singular_point = x < 0 ? -1-x : 1-x;
+            auto e1 = construct_DE_sections(-1.0, singular_point, Nx);
+            auto e2 = construct_DE_sections(singular_point, 1.0, Nx);
+            std::copy(e1.begin(), e1.end(), std::back_inserter(section_edges_xp_DE));
+            std::copy(e2.begin(), e2.end(), std::back_inserter(section_edges_xp_DE));
+            std::sort(section_edges_xp_DE.begin(), section_edges_xp_DE.end());
+          }
 
           std::vector<double> xp, wp;
+          /*
           std::tie(xp,wp) = integral_nodes_multi_section(
               section_edges_xp_new,
-              16,
+              3,
               //n_gl, //debug
               (x < 0 ? -1-x : 1-x)
           );
+           */
+
+          std::tie(xp,wp) = integral_nodes_multi_section(
+              section_edges_xp_DE,
+              n_gl,
+              (x < 0 ? -1-x : 1-x)
+          );
+
+          std::vector<double> v3(dim_f_G1);
+          std::vector<double> v2(dim_b_G2);
+          std::vector<double> v1(dim_f_G2);
 
           for (int ixp=0; ixp<xp.size(); ++ixp) {
             for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
-              auto v3 = compute_value(basis_f[lp2], xp[ixp], -1.0);
+              v3[lp2] = compute_value(basis_f[lp2], xp[ixp], -1.0);
+            }
+            for (int l3 = 0; l3 < dim_b_G2; ++l3) {
+              v2[l3]= compute_value(basis_b[l3], 0.5 * (x - xp[ixp]), 1.0);
+            }
+            for (int l1=0; l1<dim_f_G2; ++l1) {
+              v1[l1] = compute_value(basis_f[l1], x + xp[ixp], -1.0);
+            }
+
+            for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
+              //auto v3 = compute_value(basis_f[lp2], xp[ixp], -1.0);
               for (int l3 = 0; l3 < dim_b_G2; ++l3) {
-                auto v2 = compute_value(basis_b[l3], 0.5 * (x - xp[ixp]), 1.0);
+                //auto v2 = compute_value(basis_b[l3], 0.5 * (x - xp[ixp]), 1.0);
                 for (int l1=0; l1<dim_f_G2; ++l1) {
-                  auto v1 = compute_value(basis_f[l1], x + xp[ixp], -1.0);
+                  //auto v1 = compute_value(basis_f[l1], x + xp[ixp], -1.0);
                   //if (lp2 == dim_f_G1-1 && l3==dim_b_G2-1 && l1==dim_f_G2-1) {
                    //std::cout << " " << xp[ixp] << " " << v1 * v2 * v3 << " " << v1 << " " << v2 << " " << v3 << std::endl;
                   //}
-                  sub(l1, l3, lp2) += wp[ixp] * v1 * v2 * v3;
+                  sub(l1, l3, lp2) += wp[ixp] * v1[l1]* v2[l3] * v3[lp2];
+                  //sub(l1, l3, lp2) += wp[ixp] * v1 * v2 * v3;
                 }
               }
             }
           }
         }
 
-        C1_x.setZero();
-        for (int l1=0; l1<dim_f_G2; ++l1) {
+        //C1_x.setZero();
+        std::vector<double> coeff(dim_f_G1);
+        for (int lp1=0; lp1<dim_f_G1; ++lp1) {
+          coeff[lp1] = basis_f[lp1].compute_value(x);
+        }
+        for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
           for (int l3=0; l3<dim_b_G2; ++l3) {
-            for (int lp1=0; lp1<dim_f_G1; ++lp1) {
-              for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
-                C1_x(l1, l3, lp1, lp2) = basis_f[lp1].compute_value(x) * sub(l1, l3, lp2);
+            for (int l1=0; l1<dim_f_G2; ++l1) {
+              for (int lp1=0; lp1<dim_f_G1; ++lp1) {
+                C1_x(l1, l3, lp1, lp2) = coeff[lp1] * sub(l1, l3, lp2);
               }
             }
           }
         }
         C1 += w_gl[i] * C1_x;
-        std::cout << "x= " << x <<  " " << C1_x(4,4,4,4) << std::endl;
+        //std::cout << "x= " << x <<  " " << C1_x(4,4,4,4) << std::endl;
       }
 
       return -4 * G1.mesh1().beta() * C1;

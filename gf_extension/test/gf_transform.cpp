@@ -275,38 +275,24 @@ TEST_F(GfTransformTest, BubbleFShift) {
     ASSERT_NEAR(std::accumulate(w.begin(), w.end(), 0.0), 1.0, 1e-8);
   }
 
-  int nl_f = 5;
-  int nl_b = 5;
-  const auto i0 = g::index_mesh::index_type(0);
-  const auto i1 = g::index_mesh::index_type(1);
-
-  //auto bf_f = basis.all();
-  //bf_f.resize(nl_f);
+  int nl_f = 20;
+  int nl_b = 20;
 
   auto bf_b = basis_b.all();
   bf_b.resize(nl_b);
 
-  auto r3 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      Gl, bf_b, nl_f, 3, 1000);
-  std::cout << r3(0,0,0,0) << std::endl;
+  std::cout << "dim_f" << Gl.mesh1().extent() << std::endl;
+  auto r200 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      Gl, bf_b, nl_f, 100, 100);
 
-  //auto r4 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      //Gl, bf_b, nl_f, 3, 1000);
-  //std::cout << r4(0,0,0,0) << std::endl;
-  /*
+  auto r300 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      Gl, bf_b, nl_f, 200, 200);
 
-  auto r5 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      Gl, bf_b, nl_f, 5);
-  std::cout << r5(0,0,0,0) << std::endl;
-   */
+  std::cout << r300(0,0,0,0) << std::endl;
+  std::cout << r300(0,0,0,0)-r200(0,0,0,0) << std::endl;
+  Eigen::Tensor<double,4> diff = r300 - r200;
+  std::cout << "max_diff " << diff.abs().maximum() << std::endl;
 
-  //auto r10 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      //Gl, bf_b, nl_f, 10);
-  //std::cout << r10(0,0,0,0) << std::endl;
-
-  //auto r16 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      //Gl, bf_b, nl_f, 16);
-  //std::cout << r16(0,0,0,0) << std::endl;
 }
 
 
