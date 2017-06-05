@@ -143,9 +143,13 @@ TEST_F(GfTransformTest, IRtoMatsubara) {
   }
 }
 
+
+/*
 TEST_F(GfTransformTest, BubbleH) {
   int nl_f = 10;
   int nl_b = 20;
+  //int nl_f = 20;
+  //int nl_b = 30;
   const auto i0 = g::index_mesh::index_type(0);
   const auto i1 = g::index_mesh::index_type(1);
 
@@ -205,7 +209,6 @@ TEST_F(GfTransformTest, BubbleH) {
       }
     }
   }
-  std::cout << "max_val" << max_val << std::endl;
   ASSERT_TRUE(max_val < 0.1);
 
   //for (int l3 = 0; l3 < nl_b; ++l3) {
@@ -260,6 +263,75 @@ TEST_F(GfTransformTest, BubbleH) {
   }
   std::cout << "max_diff " << max_diff << std::endl;
 }
+ */
+
+TEST_F(GfTransformTest, BubbleFShift) {
+  std::vector<int> n_list {{3, 4, 10, 16}};
+
+  for (auto n : n_list) {
+    std::vector<double> x,w;
+    std::vector<double> section_edges {{-0.9, 0.0, 0.1}};
+    std::tie(x,w) = alps::gf_extension::detail::integral_nodes_multi_section(section_edges, n);
+    ASSERT_NEAR(std::accumulate(w.begin(), w.end(), 0.0), 1.0, 1e-8);
+  }
+
+  int nl_f = 5;
+  int nl_b = 5;
+  const auto i0 = g::index_mesh::index_type(0);
+  const auto i1 = g::index_mesh::index_type(1);
+
+  //auto bf_f = basis.all();
+  //bf_f.resize(nl_f);
+
+  auto bf_b = basis_b.all();
+  bf_b.resize(nl_b);
+
+  auto r3 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      Gl, bf_b, nl_f, 3, 1000);
+  std::cout << r3(0,0,0,0) << std::endl;
+
+  //auto r4 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      //Gl, bf_b, nl_f, 3, 1000);
+  //std::cout << r4(0,0,0,0) << std::endl;
+  /*
+
+  auto r5 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      Gl, bf_b, nl_f, 5);
+  std::cout << r5(0,0,0,0) << std::endl;
+   */
+
+  //auto r10 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      //Gl, bf_b, nl_f, 10);
+  //std::cout << r10(0,0,0,0) << std::endl;
+
+  //auto r16 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+      //Gl, bf_b, nl_f, 16);
+  //std::cout << r16(0,0,0,0) << std::endl;
+}
+
+
+
+/*
+TEST_F(GfTransformTest, MatsubaraToIR) {
+const auto i0 = g::index_mesh::index_type(0);
+
+const int niw = 10000;
+
+//gomega_type Gomega(g::matsubara_positive_mesh(beta, niw), Gl.mesh2(), Gl.mesh3());
+
+//ge::transformer<complex_gl_type, gomega_type> c(Gl.mesh1(), Gomega.mesh1());
+
+//gomega_type Gomega_tmp(c(Gl));
+
+ for (int i = 0; i < Gomega_tmp.mesh1().extent(); ++i) {
+  ASSERT_TRUE(
+      std::abs(
+          Gomega_tmp(g::matsubara_positive_mesh::index_type(i), i0, i0)-compute_gomega(i)
+      ) < 1e-6
+  );
+}
+}
+*/
 
 
 

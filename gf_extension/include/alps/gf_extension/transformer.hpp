@@ -413,6 +413,263 @@ namespace gf_extension {
       }
     }
 
+    std::vector<double> construct_mesh_from_zeros(const alps::gf::piecewise_polynomial<double>& f) {
+      std::vector<double> points;
+      double eps = 1e-12;
+      points.push_back(-1.0+eps);
+      for (int i=0; i<f.num_sections(); ++i) {
+        auto f0 = f.compute_value(f.section_edge(i));
+        auto f1 = f.compute_value(f.section_edge(i+1));
+        if (f0 * f1 < 0) {
+          points.push_back(0.5*(f.section_edge(i)+f.section_edge(i+1)));
+        }
+      }
+      points.push_back(1.0-eps);
+      return points;
+    }
+
+    inline
+    std::pair<std::vector<double>,std::vector<double>>
+    gauss_legendre_nodes(int n) {
+      if (n==3) {
+        std::vector<double> x{{0.0000000000000000, -0.7745966692414834, 0.7745966692414834}};
+        std::vector<double> w{{0.8888888888888888, 0.5555555555555556, 0.5555555555555556}};
+        return std::make_pair(x, w);
+      } else if (n==4) {
+        std::vector<double> x{{-0.3399810435848563, 0.3399810435848563, -0.8611363115940526, 0.8611363115940526}};
+        std::vector<double> w{{0.6521451548625461, 0.6521451548625461, 0.3478548451374538, 0.3478548451374538}};
+        return std::make_pair(x, w);
+      } else if (n==5) {
+        std::vector<double> w{{0.5688888888888889, 0.4786286704993665, 0.4786286704993665, 0.2369268850561891, 0.2369268850561891}};
+        std::vector<double> x{{0.0000000000000000,-0.5384693101056831,0.5384693101056831,-0.9061798459386640,0.9061798459386640}};
+        return std::make_pair(x, w);
+      } else if (n==10) {
+        std::vector<double> x{{0.1488743389816312108848260, 0.4333953941292471907992659, 0.6794095682990244062343274,
+                               0.8650633666889845107320967, 0.9739065285171717200779640}};
+        std::vector<double> w{{0.2955242247147528701738930, 0.2692667193099963550912269, 0.2190863625159820439955349,
+                               0.1494513491505805931457763, 0.0666713443086881375935688}};
+        for (int i = 0; i < n / 2; ++i) {
+          x.push_back(-x[i]);
+          w.push_back(w[i]);
+        }
+        return std::make_pair(x, w);
+      } else if (n==16) {
+        std::vector<double> x{{0.0950125098376374401853193,0.2816035507792589132304605,0.4580167776572273863424194,0.6178762444026437484466718,0.7554044083550030338951012,0.8656312023878317438804679,0.9445750230732325760779884,0.9894009349916499325961542}};
+        std::vector<double> w{{0.1894506104550684962853967,0.1826034150449235888667637,0.1691565193950025381893121,0.1495959888165767320815017,0.1246289712555338720524763,0.0951585116824927848099251,0.0622535239386478928628438,0.0271524594117540948517806}};
+        for (int i = 0; i < n / 2; ++i) {
+          x.push_back(-x[i]);
+          w.push_back(w[i]);
+        }
+        return std::make_pair(x, w);
+      } else {
+        throw std::runtime_error("Not supproted");
+      }
+    }
+
+    inline
+    std::pair<std::vector<double>,std::vector<double>>
+    integral_nodes_multi_section(const std::vector<double>& section_edges, int n, double singular_point = -1E+300) {
+      std::vector<double> xi_gl, w_gl;
+      std::tie(xi_gl,w_gl) = gauss_legendre_nodes(n);
+
+      std::vector<double> x_tot, w_tot;
+
+      for (int i=0; i<section_edges.size()-1; ++i) {
+        double xi = section_edges[i];
+        double xip1 = section_edges[i+1];
+        double dx = xip1 - xi;
+        if (dx < 0) {
+          throw std::runtime_error("dx cannot be negative");
+        }
+        if (dx < 1e-10 || (std::abs(xi-singular_point) < 1e-10 && std::abs(xip1-singular_point) < 1e-10)) {
+          continue;
+        }
+
+        for (int j=0; j<n; ++j) {
+          x_tot.push_back((dx/2)*(xi_gl[j]+1.0) + xi);
+          w_tot.push_back((dx/2)*w_gl[j]);
+        }
+      }
+
+      return std::make_pair(x_tot, w_tot);
+    }
+
+    inline
+    std::vector<double>
+    split_sections(const std::vector<double>& original, int ndiv) {
+      std::vector<double> new_one;
+
+      for (int i=0; i<original.size()-1; ++i) {
+        double x0 = original[i];
+        double x1 = original[i+1];
+        double dx = (x1 - x0)/ndiv;
+        for (int j=0; j<ndiv; ++j) {
+          new_one.push_back(x0 + dx * j);
+        }
+      }
+      new_one.push_back(original.back());
+
+      assert(new_one.front() == original.front());
+      assert(new_one.back() == original.back());
+
+      return new_one;
+    }
+
+    template<typename T>
+    T compute_value(const alps::gf::piecewise_polynomial<T>& f, double x, double sign) {
+      if (-1 <= x && x <= 1) {
+        return f.compute_value(x);
+      } else if (x > 1) {
+        int idx = static_cast<int>((x+1)/2);
+        return f.compute_value(x-2*idx) * (idx % 2 == 0 ? 1.0 : sign);
+      } else { //x < -1
+        int idx = static_cast<int>(-(x - 1) / 2);
+        return f.compute_value(x+2*idx) * (idx % 2 == 0 ? 1.0 : sign);
+      }
+    }
+
+    std::vector<double>
+    construct_DE_sections(int Nx, double tmin=3.0) {
+      //DE mesh
+      std::vector<double> section_edges_DE(Nx);
+      double dt = 2 * tmin / (Nx - 1);
+      for (int it = 0; it < Nx; ++it) {
+        double t = dt * it - tmin;
+        double x = std::tanh(0.5 * M_PI * std::sinh(t));
+        section_edges_DE[it] = x;
+      }
+      return section_edges_DE;
+    }
+
+    template<typename T>
+    Eigen::Tensor<T,4>
+    compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+        const alps::gf::three_index_gf<std::complex<double>,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& G1,
+        std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
+        int dim_f_G2,
+        int n_gl,
+        int Nx=1000
+    ) {
+      int dim_f_G1 = G1.mesh1().extent();
+      auto basis_f = detail::extract_basis_functions(G1.mesh1());
+      int dim_b_G2 = basis_b.size();
+      double eps = 1e-12;
+
+      //auto section_edges_x = split_sections(construct_mesh_from_zeros(basis_f.back()), n_div);
+      auto section_edges_x = construct_mesh_from_zeros(basis_f.back());
+      auto section_edges_f = section_edges_x;
+      //auto section_edges_f_dense = split_sections(section_edges_x, 10);
+
+      //DE mesh
+      auto section_edges_DE = construct_DE_sections(Nx);
+      /*
+      std::vector<double> section_edges_DE(Nx);
+      {
+        double tmin = 3.0;
+        double dt = 2*tmin/(Nx-1);
+        for (int it=0; it<Nx; ++it) {
+          double t = dt*it - tmin;
+          double x = std::tanh(0.5*M_PI*std::sinh(t));
+          section_edges_DE[it] = x;
+        }
+      }
+       */
+
+      std::vector<double> xi_gl, w_gl;
+      std::tie(xi_gl,w_gl) = integral_nodes_multi_section(section_edges_DE, n_gl);
+      //std::tie(xi_gl,w_gl) = integral_nodes_multi_section(section_edges_x, n_gl);
+
+      Eigen::Tensor<T,4> C1(dim_f_G2, dim_b_G2, dim_f_G1, dim_f_G1);
+      Eigen::Tensor<T,4> C1_x(dim_f_G2, dim_b_G2, dim_f_G1, dim_f_G1);
+      C1.setZero();
+
+
+      //Integration in each section
+      for (int i=0; i<xi_gl.size(); ++i) {
+        double x = xi_gl[i];
+        if (x < -1 || x > 1) {
+          throw std::runtime_error("x is out of range");
+        }
+        //std::cout << "#x= " << x << std::endl;
+
+        //integrate over xp
+        Eigen::Tensor<T,3> sub(dim_f_G2, dim_b_G2, dim_f_G1);
+        sub.setZero();
+        {
+          std::vector<double> section_edges_xp;
+          std::vector<double> dxp_list {{0, -x, -x+2, -x-2}};
+          for (auto xp : section_edges_f) {
+            for (auto dxp : dxp_list) {
+              auto point = xp + dxp;
+              if (point <= 1 && point >= -1) {
+                section_edges_xp.push_back(point);
+              }
+            }
+          }
+          section_edges_xp.push_back(-1+eps);
+          section_edges_xp.push_back(1-eps);
+          std::sort(section_edges_xp.begin(), section_edges_xp.end());
+
+          std::vector<double> section_edges_xp_new;
+          {
+            std::vector<double> vals(section_edges_xp.size());
+            for (int ixp=0; ixp<section_edges_xp.size(); ++ixp) {
+              double xp_tmp = section_edges_xp[ixp];
+              vals[ixp] = compute_value(basis_f[dim_f_G1-1], xp_tmp, -1.0) *
+                  compute_value(basis_b[dim_b_G2-1], 0.5 * (x - xp_tmp), 1.0) *
+                  compute_value(basis_f[dim_f_G2-1], x + xp_tmp, -1.0);
+            }
+            section_edges_xp_new.push_back(-1);
+            for (int ixp=0; ixp<section_edges_xp.size()-1; ++ixp) {
+              if (vals[ixp] * vals[ixp+1] < 0) {
+                section_edges_xp_new.push_back(0.5*(section_edges_xp[ixp]+section_edges_xp[ixp+1]));
+              }
+            }
+            section_edges_xp_new.push_back(1);
+          }
+
+          std::vector<double> xp, wp;
+          std::tie(xp,wp) = integral_nodes_multi_section(
+              section_edges_xp_new,
+              16,
+              //n_gl, //debug
+              (x < 0 ? -1-x : 1-x)
+          );
+
+          for (int ixp=0; ixp<xp.size(); ++ixp) {
+            for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
+              auto v3 = compute_value(basis_f[lp2], xp[ixp], -1.0);
+              for (int l3 = 0; l3 < dim_b_G2; ++l3) {
+                auto v2 = compute_value(basis_b[l3], 0.5 * (x - xp[ixp]), 1.0);
+                for (int l1=0; l1<dim_f_G2; ++l1) {
+                  auto v1 = compute_value(basis_f[l1], x + xp[ixp], -1.0);
+                  //if (lp2 == dim_f_G1-1 && l3==dim_b_G2-1 && l1==dim_f_G2-1) {
+                   //std::cout << " " << xp[ixp] << " " << v1 * v2 * v3 << " " << v1 << " " << v2 << " " << v3 << std::endl;
+                  //}
+                  sub(l1, l3, lp2) += wp[ixp] * v1 * v2 * v3;
+                }
+              }
+            }
+          }
+        }
+
+        C1_x.setZero();
+        for (int l1=0; l1<dim_f_G2; ++l1) {
+          for (int l3=0; l3<dim_b_G2; ++l3) {
+            for (int lp1=0; lp1<dim_f_G1; ++lp1) {
+              for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
+                C1_x(l1, l3, lp1, lp2) = basis_f[lp1].compute_value(x) * sub(l1, l3, lp2);
+              }
+            }
+          }
+        }
+        C1 += w_gl[i] * C1_x;
+        std::cout << "x= " << x <<  " " << C1_x(4,4,4,4) << std::endl;
+      }
+
+      return -4 * G1.mesh1().beta() * C1;
+    }
+
   }//namespace detail
 
   template<typename T>
@@ -1008,6 +1265,36 @@ namespace gf_extension {
     }
   }
 
+  /*
+  inline
+  void construct_log_mesh_2(long max_n,
+                          int n_exact_sum,
+                          int max_num_mesh_points,
+                          std::vector<long>& n_vec,
+                          std::vector<double>& weight) {
+    std::set<long> mesh_points;
+    for (int n=0; )
+
+
+    n_vec.resize(0);
+    weight.resize(0);
+
+    long n_start = 0, dn = 1;
+    while (n_start < max_n) {
+      long n_mid = (long) std::round(0.5 * (n_start + n_start + dn - 1));
+      n_vec.push_back(n_mid);
+      weight.push_back(1. * dn);
+
+      n_start += dn;
+      if (n_start < max_n_exact_sum) {
+        dn = 1;
+      } else {
+        dn = std::max(long(dn * ratio_sum), dn + 1);
+      }
+    }
+  }
+  */
+
   template<typename T>
   Eigen::Tensor<T, 6>
   compute_C_tensor(
@@ -1229,7 +1516,7 @@ namespace gf_extension {
       alps::gf::index_mesh,
       alps::gf::index_mesh,
       alps::gf::index_mesh>
-  compute_G2_bubble_F(
+  compute_G2_bubble_F_noshift(
       const alps::gf::three_index_gf<T,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& Gl,
       const alps::gf::numerical_mesh<double>& mesh_f,
       const alps::gf::numerical_mesh<double>& mesh_b
@@ -1348,6 +1635,202 @@ namespace gf_extension {
 
     return g2;
   }
+
+
+ /**
+ * Compute a G2 bubule of Fock type
+ * @tparam T       Scalar type of Gl
+ * @param Gl       G1
+ * @param mesh_f   Fermionic mesh of G2
+ * @param mesh_b   Bosonic mesh of G2
+ * @return         G2 bubble of Hartree type
+ * All numerical_mesh must be ir basis sets with the same value of Lambda
+ */
+  template<typename T>
+  alps::gf::seven_index_gf<
+      std::complex<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh>
+  compute_G2_bubble_F_shift(
+      const alps::gf::three_index_gf<T,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& Gl,
+      const alps::gf::numerical_mesh<double>& mesh_f,
+      const alps::gf::numerical_mesh<double>& mesh_b
+  ) {
+    using G2_t = alps::gf::seven_index_gf<
+        std::complex<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::numerical_mesh<double>,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh,
+        alps::gf::index_mesh>;
+
+    double beta = Gl.mesh1().beta();
+
+    if (mesh_f.beta() != beta || mesh_b.beta() != beta) {
+      throw std::invalid_argument("All mesh must have the same value of beta.");
+    }
+    if (Gl.mesh2() != Gl.mesh3()) {
+      throw std::invalid_argument("mesh2 and mesh3 of Gl must be identical.");
+    }
+    if (Gl.mesh1().statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh1 of Gl must be fermionic.");
+    }
+    if (mesh_f.statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh_f must be fermionic.");
+    }
+    if (mesh_b.statistics() != alps::gf::statistics::BOSONIC) {
+      throw std::invalid_argument("mesh_b must be bosonic.");
+    }
+
+    G2_t g2(mesh_f, mesh_f, mesh_b, Gl.mesh2(), Gl.mesh2(), Gl.mesh2(), Gl.mesh2());
+
+    int nf = Gl.mesh2().extent();
+    int nl_f_G2 = mesh_f.extent();
+    int nl_b_G2 = mesh_b.extent();
+    int nl_G1 = Gl.mesh1().extent();
+
+    for (int l=0; l<std::min(nl_G1,nl_f_G2); ++l) {
+      if (!(mesh_f.basis_function(l) == Gl.mesh1().basis_function(l))) {
+        throw std::invalid_argument("mesh_f and Gl are not consistent.");
+      }
+    }
+
+    if (nl_G1 < nl_f_G2) {
+      throw std::invalid_argument("Too few fermionic basis functions for G1.");
+    }
+
+    //Construct a mesh
+    long max_n = 1E+10;
+    int max_n_exact_sum = 200;
+    double ratio_sum = 1.02;
+    std::vector<long> n_vec;
+    std::vector<double> weight_sum;
+    construct_log_mesh(max_n, max_n_exact_sum, ratio_sum, n_vec, weight_sum);
+    int n_mesh = n_vec.size();
+
+    //Compute w tensor
+    auto basis_f = detail::extract_basis_functions(mesh_f);
+    auto basis_b = detail::extract_basis_functions(mesh_b);
+    auto w_tensor = compute_w_tensor(n_vec, basis_f, basis_b);
+
+    //Compute Tnl
+    auto Tnl_f = compute_Tnl(n_vec, g2.mesh1());
+
+    Eigen::Tensor<std::complex<double>,3> left_tensor(nl_f_G2, nl_f_G2, n_mesh);
+    for (int n=0; n<n_mesh; ++n) {
+      for (int l2=0; l2<nl_f_G2; ++l2) {
+        auto sign = l2%2==0 ? 1.0 : -1.0;
+        for (int l1=0; l1<nl_f_G2; ++l1) {
+          left_tensor(l1, l2, n) = sign * std::conj(Tnl_f(n, l1) * Tnl_f(n, l2)) * weight_sum[n] * beta;
+        }
+      }
+    }
+
+    Eigen::Tensor<std::complex<double>,4> right_tensor(n_mesh, nl_b_G2, nl_f_G2, nl_f_G2);
+    for (int n=0; n<n_mesh; ++n) {
+      for (int l3=0; l3<nl_b_G2; ++l3) {
+        for (int lp1=0; lp1<nl_f_G2; ++lp1) {
+          for (int lp2=0; lp2<nl_f_G2; ++lp2) {
+            right_tensor(n, l3, lp1, lp2) = Tnl_f(n,lp2) * w_tensor(n, l3, lp1);
+          }
+        }
+      }
+    }
+
+    std::array<Eigen::IndexPair<int>,1> product_dims {{ Eigen::IndexPair<int>(2,0) }};
+
+    Eigen::Tensor<std::complex<double>,5> trans_tensor
+        = 2*left_tensor.contract(right_tensor, product_dims).real().cast<std::complex<double>>();
+
+    Eigen::Tensor<std::complex<double>,3> data_G1;
+    detail::copy_to_tensor(data_G1, Gl);
+    Eigen::Tensor<std::complex<double>,3> data_G1_slice = data_G1.slice(
+        std::array<long,3>{{0,0,0}},
+        std::array<long,3>{{nl_f_G2, data_G1.dimension(1), data_G1.dimension(2)}}
+    );
+
+    //tmp1: (l1, l2, l3, lp1, lp2) * (lp1, i, l) => (l1, l2, l3, lp2, i, l)
+    auto tmp1 = trans_tensor.contract(
+        data_G1_slice,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(3,0)}}
+    );
+
+    //tmp2: (l1, l2, l3, lp2, i, l) * (lp2, k, j) => (l1, l2, l3, i, l, k, j)
+    auto tmp2 = tmp1.contract(
+        data_G1_slice,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(3,0)}}
+    );
+
+    //tmp3: (l1, l2, l3, i, j, k, l)
+    Eigen::Tensor<std::complex<double>,7> tmp3 = tmp2.shuffle(std::array<int,7>{{0, 1, 2,  3, 6, 5, 4}});
+
+    detail::copy_from_tensor(tmp3, g2);
+
+    return g2;
+  }
+
+
+
+  /**
+   * Compute a G2 bubule of Fock type
+   * @tparam T       Scalar type of Gl
+   * @param Gl       G1
+   * @param mesh_f   Fermionic mesh of G2
+   * @param mesh_b   Bosonic mesh of G2
+   * @param shift    Use shifted IR
+   * @return         G2 bubble of Hartree type
+   * All numerical_mesh must be ir basis sets with the same value of Lambda
+   */
+  template<typename T>
+  alps::gf::seven_index_gf<
+      std::complex<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::numerical_mesh<double>,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh,
+      alps::gf::index_mesh>
+  compute_G2_bubble_F(
+      const alps::gf::three_index_gf<T,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& Gl,
+      const alps::gf::numerical_mesh<double>& mesh_f,
+      const alps::gf::numerical_mesh<double>& mesh_b,
+      bool shift = false
+  ) {
+    double beta = Gl.mesh1().beta();
+
+    if (mesh_f.beta() != beta || mesh_b.beta() != beta) {
+      throw std::invalid_argument("All mesh must have the same value of beta.");
+    }
+    if (Gl.mesh2() != Gl.mesh3()) {
+      throw std::invalid_argument("mesh2 and mesh3 of Gl must be identical.");
+    }
+    if (Gl.mesh1().statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh1 of Gl must be fermionic.");
+    }
+    if (mesh_f.statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::invalid_argument("mesh_f must be fermionic.");
+    }
+    if (mesh_b.statistics() != alps::gf::statistics::BOSONIC) {
+      throw std::invalid_argument("mesh_b must be bosonic.");
+    }
+
+    if (shift) {
+      return compute_G2_bubble_F_shift(Gl, mesh_f, mesh_b);
+    } else {
+      return compute_G2_bubble_F_noshift(Gl, mesh_f, mesh_b);
+    }
+
+  };
+
+
 
   /***
    * Transform a Hatree-type G2 object to a Fock-type G2
