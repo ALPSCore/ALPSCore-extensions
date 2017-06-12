@@ -262,6 +262,51 @@ TEST(IrBasis, DiscretizationError) {
 }
 
 template<class T>
+class SplineTest : public testing::Test {
+};
+
+TYPED_TEST_CASE(SplineTest, BasisTypes);
+
+TYPED_TEST(SplineTest, BasisTypes) {
+  //construct ir basis
+  const double Lambda = 100.0;
+  const int max_dim = 100;
+  TypeParam basis(Lambda, max_dim);
+  ASSERT_TRUE(basis.dim()>3);
+
+  long max_n = 1E+10;
+
+  alps::gf_extension::interpolate_Tbar_ol interpolate(basis, max_n);
+
+  const auto& data_point = interpolate.data_point();
+
+  std::vector<long> o_check;
+  for (int i=0; i<data_point.size()-1; ++i) {
+    o_check.push_back(
+        static_cast<long>(0.5*(data_point[i]+data_point[i+1]))
+    );
+  }
+
+  auto Tbar_ol = basis.compute_Tbar_ol(o_check);
+
+  for (int i=0; i<o_check.size(); ++i) {
+    for (int l = 0; l < 1; ++l) {
+      auto o = o_check[i];
+      auto v = interpolate(o_check[i], l);
+
+      ASSERT_NEAR(v.real(), Tbar_ol(i,l).real(), 1e-8);
+      ASSERT_NEAR(v.imag(), Tbar_ol(i,l).imag(), 1e-8);
+
+      if ((l+o)%2==0) {
+        ASSERT_NEAR(std::abs(Tbar_ol(i,l).imag()), 0.0, 1e-8);
+      } else {
+        ASSERT_NEAR(std::abs(Tbar_ol(i,l).real()), 0.0, 1e-8);
+      }
+    }
+  }
+}
+
+template<class T>
 class InsulatingGtau : public testing::Test {
 };
 
@@ -333,6 +378,23 @@ TYPED_TEST(InsulatingGtau, BasisTypes) {
       }
       std::complex<double> z = -0.5 / (zi * wn - 1.0) - 0.5 / (zi * wn + 1.0);
       ASSERT_NEAR(std::abs(z-coeff_iw(n)), 0.0, 1e-8);
+    }
+
+    //compute Tnl_bar
+    {
+      std::vector<long> nvec;
+      for (int n=0; n<2*n_iw; ++n) {
+        nvec.push_back(static_cast<long>(n));
+      }
+      auto Tbar_ol = basis.compute_Tbar_ol(nvec);
+      auto shift = basis.get_statistics()==alps::gf::statistics::FERMIONIC ? 1 : 0;
+
+      for (int l = 0; l < basis.dim(); ++l) {
+        for (int n = 0; n < n_iw; ++n) {
+          ASSERT_NEAR(std::abs(Tnl_mat(n,l) - Tbar_ol(2*n+shift,l)), 0.0, 1e-8);
+        }
+      }
+
     }
 
 
@@ -459,6 +521,7 @@ class GfTest : public testing::Test {
 
 };
 
+
 TEST_F(GfTest, Gtau) {
   const auto i0 = g::index_mesh::index_type(0);
   for (int i = 0; i < Gtau.mesh1().extent(); ++i) {
@@ -497,6 +560,7 @@ TEST_F(GfTest, IRtoMatsubara) {
     );
   }
 }
+
 
 /*
 TEST_F(GfTest, MatsubaraToIR) {
@@ -627,7 +691,7 @@ TEST_P(G2WTensorTest, Spline) {
   auto w_tensor = ge::compute_w_tensor(n_vec, basis_f, basis_b);
   auto w_tensor_dense = ge::compute_w_tensor(n_vec_dense, basis_f, basis_b);
 
-  std::vector<double> x_array(n_vec.size()-1);
+
   std::vector<double> y_re_array(n_vec.size()-1);
   std::vector<double> y_imag_array(n_vec.size()-1);
   double max_diff = 0.0;

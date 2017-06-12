@@ -144,7 +144,6 @@ TEST_F(GfTransformTest, IRtoMatsubara) {
 }
 
 
-/*
 TEST_F(GfTransformTest, BubbleH) {
   int nl_f = 10;
   int nl_b = 20;
@@ -263,9 +262,11 @@ TEST_F(GfTransformTest, BubbleH) {
   }
   std::cout << "max_diff " << max_diff << std::endl;
 }
- */
 
 TEST_F(GfTransformTest, BubbleFShift) {
+  using dcomplex = std::complex<double>;
+  const auto i0 = g::index_mesh::index_type(0);
+
   std::vector<int> n_list {{3, 4, 10, 16}};
 
   for (auto n : n_list) {
@@ -277,22 +278,66 @@ TEST_F(GfTransformTest, BubbleFShift) {
 
   int nl_f = 20;
   int nl_b = 20;
+  int nl_f_G1 = Gl.mesh1().extent();
+
+  {
+    Eigen::Tensor<double,3> trans_tensor2 =
+        alps::gf_extension::compute_transformation_tensor_G2_bubble_vector_to_matrix(Gl.mesh1());
+    Eigen::TensorMap<Eigen::Tensor<double,2>> map(trans_tensor2.data(), nl_f_G1*nl_f_G1, nl_f_G1);
+    Eigen::Tensor<double,2> t2 = map.contract(map, std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(0,0)}});
+    for (int l1=0; l1<nl_f_G1; ++l1) {
+      for (int l2=0; l2<nl_f_G1; ++l2) {
+        std::cout << "t2 " << l1 << " " << l2 << " " << t2(l1,l2) << std::endl;
+      }
+    }
+  }
+
 
   auto bf_b = basis_b.all();
   bf_b.resize(nl_b);
 
   std::cout << "dim_f" << Gl.mesh1().extent() << std::endl;
   auto r200 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      Gl, bf_b, nl_f, 100, 100);
+      Gl.mesh1(), bf_b, nl_f, 100, 100);
 
   auto r300 = alps::gf_extension::detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-      Gl, bf_b, nl_f, 200, 200);
+      Gl.mesh1(), bf_b, nl_f, 200, 200);
+
+  for (int l2p = 0; l2p < nl_f_G1; ++l2p) {
+    for (int l1p=0; l1p<nl_f_G1; ++l1p) {
+      for (int l1=0; l1<nl_f; ++l1) {
+        for (int l3=0; l3<nl_b; ++l3) {
+          if ((l3+l1+l1p+l2p)%2==1) {
+            ASSERT_NEAR(r200(l1,l3,l1p,l2p), 0.0, 1e-10);
+          }
+        }
+      }
+    }
+  }
 
   std::cout << r300(0,0,0,0) << std::endl;
+  std::cout << r300(0,0,0,1) << std::endl;
   std::cout << r300(0,0,0,0)-r200(0,0,0,0) << std::endl;
   Eigen::Tensor<double,4> diff = r300 - r200;
   std::cout << "max_diff " << diff.abs().maximum() << std::endl;
 
+  auto mesh_f = basis.construct_mesh(beta, nl_f);
+  auto mesh_b = basis_b.construct_mesh(beta, nl_b);
+  auto g2_bubble_f = alps::gf_extension::compute_G2_bubble_F_shift(
+      Gl,
+      mesh_f,
+      mesh_b
+  );
+
+  using nit = alps::gf::numerical_mesh<double>::index_type;
+  using it = alps::gf::index_mesh::index_type;
+
+  for (int l2=0; l2<nl_f; ++l2) {
+    for (int l1=0; l1<nl_f; ++l1) {
+      std::cout << l1 << " " << l2 << " " << g2_bubble_f(nit(l1), nit(l2), nit(0), it(i0), it(i0), it(i0), it(i0)).real() << std::endl;
+    }
+    std::cout << std::endl;;
+  }
 }
 
 

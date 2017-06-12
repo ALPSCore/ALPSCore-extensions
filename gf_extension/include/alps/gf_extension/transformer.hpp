@@ -547,32 +547,19 @@ namespace gf_extension {
     template<typename T>
     Eigen::Tensor<T,4>
     compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
-        const alps::gf::three_index_gf<std::complex<double>,alps::gf::numerical_mesh<double>,alps::gf::index_mesh,alps::gf::index_mesh>& G1,
-        std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
+        const alps::gf::numerical_mesh<double>& mesh_f_G1,
+        const std::vector<alps::gf::piecewise_polynomial<T>>& basis_b,
         int dim_f_G2,
         int Nx = 100,
         int Nxp = 100
     ) {
-      int dim_f_G1 = G1.mesh1().extent();
-      auto basis_f = detail::extract_basis_functions(G1.mesh1());
+      int dim_f_G1 = mesh_f_G1.extent();
+      auto basis_f = detail::extract_basis_functions(mesh_f_G1);
       int dim_b_G2 = basis_b.size();
-      double eps = 1e-12;
       int n_gl = 3;
 
-      //auto section_edges_x = split_sections(construct_mesh_from_zeros(basis_f.back()), n_div);
-      auto section_edges_x = construct_mesh_from_zeros(basis_f.back());
-      auto section_edges_f = section_edges_x;
-      //auto section_edges_f_dense = split_sections(section_edges_x, 10);
-
-      //DE mesh for (-1,1)
-      std::vector<double> section_edges_DE;
-      {
-        auto e1 = construct_DE_sections(-1.0, 0.0, Nx);
-        auto e2 = construct_DE_sections( 0.0, 1.0, Nx);
-        std::copy(e1.begin(), e1.end(), std::back_inserter(section_edges_DE));
-        std::copy(e2.begin(), e2.end(), std::back_inserter(section_edges_DE));
-        std::sort(section_edges_DE.begin(), section_edges_DE.end());
-      }
+      //DE mesh for (0,1)
+      auto section_edges_DE = construct_DE_sections(0.0, 1.0, Nx);
 
       std::vector<double> xi_gl, w_gl;
       std::tie(xi_gl,w_gl) = integral_nodes_multi_section(section_edges_DE, n_gl);
@@ -584,54 +571,19 @@ namespace gf_extension {
       //Integration in each section
       for (int i=0; i<xi_gl.size(); ++i) {
         double x = xi_gl[i];
-        if (x < -1 || x > 1) {
+        if (x < 0 || x > 1) {
           throw std::runtime_error("x is out of range");
         }
-        //std::cout << "#x= " << x << std::endl;
 
         //integrate over xp
         Eigen::Tensor<T,3> sub(dim_f_G2, dim_b_G2, dim_f_G1);
         sub.setZero();
         {
-          /*
-          std::vector<double> section_edges_xp;
-          std::vector<double> dxp_list {{0, -x, -x+2, -x-2}};
-          for (auto xp : section_edges_f) {
-            for (auto dxp : dxp_list) {
-              auto point = xp + dxp;
-              if (point <= 1 && point >= -1) {
-                section_edges_xp.push_back(point);
-              }
-            }
-          }
-          section_edges_xp.push_back(-1+eps);
-          section_edges_xp.push_back(1-eps);
-          std::sort(section_edges_xp.begin(), section_edges_xp.end());
-
-          std::vector<double> section_edges_xp_new;
-          {
-            std::vector<double> vals(section_edges_xp.size());
-            for (int ixp=0; ixp<section_edges_xp.size(); ++ixp) {
-              double xp_tmp = section_edges_xp[ixp];
-              vals[ixp] = compute_value(basis_f[dim_f_G1-1], xp_tmp, -1.0) *
-                  compute_value(basis_b[dim_b_G2-1], 0.5 * (x - xp_tmp), 1.0) *
-                  compute_value(basis_f[dim_f_G2-1], x + xp_tmp, -1.0);
-            }
-            section_edges_xp_new.push_back(-1);
-            for (int ixp=0; ixp<section_edges_xp.size()-1; ++ixp) {
-              if (vals[ixp] * vals[ixp+1] < 0) {
-                section_edges_xp_new.push_back(0.5*(section_edges_xp[ixp]+section_edges_xp[ixp+1]));
-              }
-            }
-            section_edges_xp_new.push_back(1);
-          }
-          */
-
           std::vector<double> section_edges_xp_DE;
           if (x == 0.0) {
             section_edges_xp_DE = construct_DE_sections(-1.0, 1.0, Nx);
           } else {
-            double singular_point = x < 0 ? -1-x : 1-x;
+            double singular_point = 1-x;
             auto e1 = construct_DE_sections(-1.0, singular_point, Nx);
             auto e2 = construct_DE_sections(singular_point, 1.0, Nx);
             std::copy(e1.begin(), e1.end(), std::back_inserter(section_edges_xp_DE));
@@ -640,19 +592,9 @@ namespace gf_extension {
           }
 
           std::vector<double> xp, wp;
-          /*
-          std::tie(xp,wp) = integral_nodes_multi_section(
-              section_edges_xp_new,
-              3,
-              //n_gl, //debug
-              (x < 0 ? -1-x : 1-x)
-          );
-           */
-
           std::tie(xp,wp) = integral_nodes_multi_section(
               section_edges_xp_DE,
-              n_gl,
-              (x < 0 ? -1-x : 1-x)
+              n_gl, 1-x
           );
 
           std::vector<double> v3(dim_f_G1);
@@ -669,18 +611,10 @@ namespace gf_extension {
             for (int l1=0; l1<dim_f_G2; ++l1) {
               v1[l1] = compute_value(basis_f[l1], x + xp[ixp], -1.0);
             }
-
             for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
-              //auto v3 = compute_value(basis_f[lp2], xp[ixp], -1.0);
               for (int l3 = 0; l3 < dim_b_G2; ++l3) {
-                //auto v2 = compute_value(basis_b[l3], 0.5 * (x - xp[ixp]), 1.0);
                 for (int l1=0; l1<dim_f_G2; ++l1) {
-                  //auto v1 = compute_value(basis_f[l1], x + xp[ixp], -1.0);
-                  //if (lp2 == dim_f_G1-1 && l3==dim_b_G2-1 && l1==dim_f_G2-1) {
-                   //std::cout << " " << xp[ixp] << " " << v1 * v2 * v3 << " " << v1 << " " << v2 << " " << v3 << std::endl;
-                  //}
                   sub(l1, l3, lp2) += wp[ixp] * v1[l1]* v2[l3] * v3[lp2];
-                  //sub(l1, l3, lp2) += wp[ixp] * v1 * v2 * v3;
                 }
               }
             }
@@ -693,19 +627,30 @@ namespace gf_extension {
           coeff[lp1] = basis_f[lp1].compute_value(x);
         }
         for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
-          for (int l3=0; l3<dim_b_G2; ++l3) {
-            for (int l1=0; l1<dim_f_G2; ++l1) {
-              for (int lp1=0; lp1<dim_f_G1; ++lp1) {
+          for (int lp1=0; lp1<dim_f_G1; ++lp1) {
+            for (int l3=0; l3<dim_b_G2; ++l3) {
+              for (int l1=0; l1<dim_f_G2; ++l1) {
                 C1_x(l1, l3, lp1, lp2) = coeff[lp1] * sub(l1, l3, lp2);
               }
             }
           }
         }
         C1 += w_gl[i] * C1_x;
-        //std::cout << "x= " << x <<  " " << C1_x(4,4,4,4) << std::endl;
       }
 
-      return -4 * G1.mesh1().beta() * C1;
+      C1 = -8 * mesh_f_G1.beta() * C1;
+      for (int lp2 = 0; lp2 < dim_f_G1; ++lp2) {
+        for (int lp1 = 0; lp1 < dim_f_G1; ++lp1) {
+          for (int l3 = 0; l3 < dim_b_G2; ++l3) {
+            for (int l1 = 0; l1 < dim_f_G2; ++l1) {
+              if ((l1+l3+lp1+lp2)%2 == 1) {
+                C1(l1, l3, lp1, lp2) = 0.0;
+              }
+            }
+          }
+        }
+      }
+      return C1;
     }
 
   }//namespace detail
@@ -897,7 +842,7 @@ namespace gf_extension {
     }
   }
 
-  /**
+ /**
  * Compute a transformation matrix from a give orthogonal basis set to Matsubara freq.
  * @tparam T  scalar type
  * @param n indices of Matsubara frequqneices for which matrix elements will be computed (in strictly ascending order).
@@ -943,6 +888,51 @@ namespace gf_extension {
     for (int n = 0; n < w.size(); ++n) {
       for (int l = 0; l < bf_src.size(); ++l) {
         Tnl(n, l) *= inv_norm[l] * std::sqrt(0.5);
+      }
+    }
+  }
+
+  /**
+  * Compute a transformation matrix (\bar{T}_{nl}) from a give orthogonal basis set to Matsubara freq.
+  * @tparam T  scalar type
+  * @param n indices of Matsubara frequqneices for which matrix elements will be computed (in strictly ascending order).
+  *          The Matsubara basis functions look like exp(i PI * (n[i]/2) * (x+1)).
+  * @param bf_src orthogonal basis functions. They must be piecewise polynomials of the same order.
+  * @param Tnl  computed transformation matrix
+  */
+  template<class T>
+  void compute_Tbar_ol(
+      const std::vector<long> &o_vec,
+      const std::vector<alps::gf::piecewise_polynomial<T>> &bf_src,
+      Eigen::Tensor<std::complex<double>, 2> &Tbar_ol
+  ) {
+    typedef std::complex<double> dcomplex;
+    typedef alps::gf::piecewise_polynomial<std::complex<double> > pp_type;
+    typedef Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic> matrix_t;
+    typedef Eigen::Tensor<std::complex<double>, 2> tensor_t;
+
+    if (o_vec.size() == 0) {
+      return;
+    }
+
+    for (int i = 0; i < o_vec.size() - 1; ++i) {
+      if (o_vec[i] > o_vec[i + 1]) {
+        throw std::runtime_error("o must be given in strictly ascending order!");
+      }
+    }
+
+    std::vector<double> w;
+    std::transform(o_vec.begin(), o_vec.end(), std::back_inserter(w), [](long o) { return 0.5 * M_PI * o; });
+
+    compute_integral_with_exp(w, bf_src, Tbar_ol);
+
+    std::vector<double> inv_norm(bf_src.size());
+    for (int l = 0; l < bf_src.size(); ++l) {
+      inv_norm[l] = 1. / std::sqrt(static_cast<double>(bf_src[l].overlap(bf_src[l])));
+    }
+    for (int n = 0; n < w.size(); ++n) {
+      for (int l = 0; l < bf_src.size(); ++l) {
+        Tbar_ol(n, l) *= inv_norm[l] * std::sqrt(0.5);
       }
     }
   }
@@ -1303,36 +1293,6 @@ namespace gf_extension {
     }
   }
 
-  /*
-  inline
-  void construct_log_mesh_2(long max_n,
-                          int n_exact_sum,
-                          int max_num_mesh_points,
-                          std::vector<long>& n_vec,
-                          std::vector<double>& weight) {
-    std::set<long> mesh_points;
-    for (int n=0; )
-
-
-    n_vec.resize(0);
-    weight.resize(0);
-
-    long n_start = 0, dn = 1;
-    while (n_start < max_n) {
-      long n_mid = (long) std::round(0.5 * (n_start + n_start + dn - 1));
-      n_vec.push_back(n_mid);
-      weight.push_back(1. * dn);
-
-      n_start += dn;
-      if (n_start < max_n_exact_sum) {
-        dn = 1;
-      } else {
-        dn = std::max(long(dn * ratio_sum), dn + 1);
-      }
-    }
-  }
-  */
-
   template<typename T>
   Eigen::Tensor<T, 6>
   compute_C_tensor(
@@ -1674,6 +1634,54 @@ namespace gf_extension {
     return g2;
   }
 
+  Eigen::Tensor<double,3>
+  compute_transformation_tensor_G2_bubble_vector_to_matrix(
+      const alps::gf::numerical_mesh<double>& mesh_f_G2) {
+    if (mesh_f_G2.statistics() != alps::gf::statistics::FERMIONIC) {
+      throw std::runtime_error("Expected fermionic mesh!");
+    }
+
+    //Construct a mesh
+    long max_n = 1E+10;
+    int max_n_exact_sum = 200;
+    double ratio_sum = 1.02;
+    std::vector<long> n_vec;
+    std::vector<double> weight_sum;
+    construct_log_mesh(max_n, max_n_exact_sum, ratio_sum, n_vec, weight_sum);
+    int n_mesh = n_vec.size();
+
+    //Compute Tnl
+    int nl_f = mesh_f_G2.extent();
+    auto Tnl_f = compute_Tnl(n_vec, mesh_f_G2);
+
+    //for (int n=0; n<n_mesh; ++n) {
+      //std::cout << "Tnl " << n_vec[n] << " " << weight_sum[n] << " " << std::conj(Tnl_f(n, 0) * Tnl_f(n, 0))* Tnl_f(n,0) << " " << Tnl_f(n,0) << std::endl;
+    //}
+
+    Eigen::Tensor<std::complex<double>,3> left_tensor(nl_f, nl_f, n_mesh);
+    for (int n=0; n<n_mesh; ++n) {
+      for (int l2=0; l2<nl_f; ++l2) {
+        auto sign = l2%2==0 ? -1.0 : 1.0;
+        for (int l1=0; l1<nl_f; ++l1) {
+          left_tensor(l1, l2, n) = sign * std::conj(Tnl_f(n, l1) * Tnl_f(n, l2)) * weight_sum[n];
+        }
+      }
+    }
+
+    Eigen::Tensor<std::complex<double>,2> right_tensor(n_mesh, nl_f);
+    for (int n=0; n<n_mesh; ++n) {
+      for (int lp1=0; lp1<nl_f; ++lp1) {
+        right_tensor(n, lp1) = Tnl_f(n,lp1);
+      }
+    }
+
+    std::array<Eigen::IndexPair<int>,1> product_dims {{ Eigen::IndexPair<int>(2,0) }};
+
+    Eigen::Tensor<double,3> trans_tensor = 2*left_tensor.contract(right_tensor, product_dims).real();
+
+    return trans_tensor;
+  };
+
 
  /**
  * Compute a G2 bubule of Fock type
@@ -1708,6 +1716,8 @@ namespace gf_extension {
         alps::gf::index_mesh,
         alps::gf::index_mesh,
         alps::gf::index_mesh>;
+
+    using dcomplex = std::complex<double>;
 
     double beta = Gl.mesh1().beta();
 
@@ -1744,72 +1754,52 @@ namespace gf_extension {
       throw std::invalid_argument("Too few fermionic basis functions for G1.");
     }
 
-    //Construct a mesh
-    long max_n = 1E+10;
-    int max_n_exact_sum = 200;
-    double ratio_sum = 1.02;
-    std::vector<long> n_vec;
-    std::vector<double> weight_sum;
-    construct_log_mesh(max_n, max_n_exact_sum, ratio_sum, n_vec, weight_sum);
-    int n_mesh = n_vec.size();
+    Eigen::Tensor<dcomplex,4> trans_tensor1 =
+        detail::compute_transformation_tensors_from_G1_to_G2_bubble_F_shift(
+            Gl.mesh1(),
+            detail::extract_basis_functions(mesh_b),
+            nl_f_G2,
+            200, 200
+        ).template cast<dcomplex>();
+    Eigen::Tensor<dcomplex,3> trans_tensor2 =
+        compute_transformation_tensor_G2_bubble_vector_to_matrix(mesh_f).cast<dcomplex>();
 
-    //Compute w tensor
-    auto basis_f = detail::extract_basis_functions(mesh_f);
-    auto basis_b = detail::extract_basis_functions(mesh_b);
-    auto w_tensor = compute_w_tensor(n_vec, basis_f, basis_b);
-
-    //Compute Tnl
-    auto Tnl_f = compute_Tnl(n_vec, g2.mesh1());
-
-    Eigen::Tensor<std::complex<double>,3> left_tensor(nl_f_G2, nl_f_G2, n_mesh);
-    for (int n=0; n<n_mesh; ++n) {
-      for (int l2=0; l2<nl_f_G2; ++l2) {
-        auto sign = l2%2==0 ? 1.0 : -1.0;
-        for (int l1=0; l1<nl_f_G2; ++l1) {
-          left_tensor(l1, l2, n) = sign * std::conj(Tnl_f(n, l1) * Tnl_f(n, l2)) * weight_sum[n] * beta;
-        }
-      }
-    }
-
-    Eigen::Tensor<std::complex<double>,4> right_tensor(n_mesh, nl_b_G2, nl_f_G2, nl_f_G2);
-    for (int n=0; n<n_mesh; ++n) {
-      for (int l3=0; l3<nl_b_G2; ++l3) {
-        for (int lp1=0; lp1<nl_f_G2; ++lp1) {
-          for (int lp2=0; lp2<nl_f_G2; ++lp2) {
-            right_tensor(n, l3, lp1, lp2) = Tnl_f(n,lp2) * w_tensor(n, l3, lp1);
-          }
-        }
-      }
-    }
-
-    std::array<Eigen::IndexPair<int>,1> product_dims {{ Eigen::IndexPair<int>(2,0) }};
-
-    Eigen::Tensor<std::complex<double>,5> trans_tensor
-        = 2*left_tensor.contract(right_tensor, product_dims).real().cast<std::complex<double>>();
-
-    Eigen::Tensor<std::complex<double>,3> data_G1;
+    Eigen::Tensor<dcomplex,3> data_G1;
     detail::copy_to_tensor(data_G1, Gl);
-    Eigen::Tensor<std::complex<double>,3> data_G1_slice = data_G1.slice(
-        std::array<long,3>{{0,0,0}},
-        std::array<long,3>{{nl_f_G2, data_G1.dimension(1), data_G1.dimension(2)}}
+
+    //tmp1: (l1, l3, lp1, lp2) * (lp1, i, l) => (l1, l3, lp2, i, l)
+    auto tmp1 = trans_tensor1.contract(
+        data_G1,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(2,0)}}
     );
 
-    //tmp1: (l1, l2, l3, lp1, lp2) * (lp1, i, l) => (l1, l2, l3, lp2, i, l)
-    auto tmp1 = trans_tensor.contract(
-        data_G1_slice,
-        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(3,0)}}
-    );
-
-    //tmp2: (l1, l2, l3, lp2, i, l) * (lp2, k, j) => (l1, l2, l3, i, l, k, j)
+    //tmp2: (l1, l3, lp2, i, l) * (lp2, k, j) => (l1, l3, i, l, k, j)
     auto tmp2 = tmp1.contract(
-        data_G1_slice,
-        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(3,0)}}
+        data_G1,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(2,0)}}
     );
 
-    //tmp3: (l1, l2, l3, i, j, k, l)
-    Eigen::Tensor<std::complex<double>,7> tmp3 = tmp2.shuffle(std::array<int,7>{{0, 1, 2,  3, 6, 5, 4}});
+    //tmp3: (l1, l3, i, j, k, l)
+    Eigen::Tensor<dcomplex,6> tmp3 = tmp2.shuffle(std::array<int,7>{{0, 1, 2, 5, 4, 3}});
 
-    detail::copy_from_tensor(tmp3, g2);
+    //(l1, l2, lp1) * (lp1, l3, i, j, k, l) => (l1, l2, l3, i, j, k, l)
+    Eigen::Tensor<dcomplex,7> tmp4 = trans_tensor2.contract(
+        tmp3,
+        std::array<Eigen::IndexPair<int>,1>{{Eigen::IndexPair<int>(2,0)}}
+    );
+
+    for (int l1=0; l1<nl_f_G2; ++l1) {
+      //for (int l1=0; l1<nl_f_G2; ++l1) {
+        std::cout << l1
+                  << " " << tmp3(l1, 0, 0, 0, 0, 0).real()
+                  << " " << tmp3(l1, 4, 0, 0, 0, 0).real()
+                  << " " << tmp3(l1, 18, 0, 0, 0, 0).real()
+                  << std::endl;
+      //}
+      //std::cout << std::endl;;
+    }
+
+    detail::copy_from_tensor(tmp4, g2);
 
     return g2;
   }
@@ -1868,6 +1858,33 @@ namespace gf_extension {
 
   };
 
+
+  /*
+  template<typename SEVEN_INDEX_GF>
+  class G2_bubble_F_computer {
+    using M4 = typename SEVEN_INDEX_GF::mesh4_type;
+    using M5 = typename SEVEN_INDEX_GF::mesh5_type;
+    using M6 = typename SEVEN_INDEX_GF::mesh6_type;
+    using M7 = typename SEVEN_INDEX_GF::mesh7_type;
+
+   public:
+    transformer_Hartree_to_Fock(
+        const alps::gf::numerical_mesh<double>& mesh_f_G2,
+        const alps::gf::numerical_mesh<double>& mesh_b_G2) : mesh_f_G2_(mesh_f_G2), mesh_b_G2_(mesh_b_G2) {
+    }
+
+    SEVEN_INDEX_GF operator()(
+        const alps::gf::three_index_gf<typename SEVEN_INDEX_GF::vtype,alps::gf::numerical_mesh<double>,M4,M4>& G1) const = 0;
+
+   protected:
+    alps::gf::numerical_mesh<double> mesh_f_G2_, mesh_b_G2_;
+  };
+   */
+
+  //template<typename SEVEN_INDEX_GF>
+  //class bubble_Fock_computer : public abstract_bubble_Fock_computer<SVEVEN_INDEX_GF> {
+//
+  //};
 
 
   /***

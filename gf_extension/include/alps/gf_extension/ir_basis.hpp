@@ -4,6 +4,7 @@
 #include <complex>
 #include <cmath>
 #include <vector>
+#include <set>
 #include <assert.h>
 
 #include <boost/multi_array.hpp>
@@ -13,6 +14,8 @@
 #include <alps/gf/mesh.hpp>
 #include "transformer.hpp"
 #include "piecewise_polynomial.hpp"
+
+#include "detail/spline.hpp"
 
 namespace alps {
 namespace gf_extension {
@@ -215,11 +218,23 @@ namespace gf_extension {
 #endif
 
     Eigen::Tensor<std::complex<double>,2>
-    compute_Tnl(const std::vector<long>& n_vec) {
+    compute_Tnl(const std::vector<long>& n_vec) const {
         Eigen::Tensor<std::complex<double>, 2> Tnl;
         compute_Tnl(n_vec, Tnl);
         return Tnl;
     }
+
+    Eigen::Tensor<std::complex<double>,2>
+    compute_Tbar_ol(const std::vector<long>& o_vec) const {
+      int no = o_vec.size();
+      int nl = basis_functions_.size();
+
+      Eigen::Tensor<std::complex<double>,2> Tbar_ol(no, nl);
+      alps::gf_extension::compute_Tbar_ol(o_vec, basis_functions_, Tbar_ol);
+
+      return Tbar_ol;
+    }
+
 
   };
 
@@ -243,6 +258,131 @@ namespace gf_extension {
    public:
     bosonic_ir_basis(double Lambda, int max_dim, double cutoff = 1e-10, int N = 501)
         : ir_basis<double>(bosonic_kernel(Lambda), max_dim, cutoff, N) {}
+  };
+
+
+  class interpolate_Tbar_ol {
+   public:
+    interpolate_Tbar_ol(const ir_basis<double>& basis, long o_max=1000000000000000) : max_exact_o_(200) {
+      //if (max_exact_o_ < 200) {
+        //throw std::runtime_error("max_exact_o_ should not be smaller than 200.");
+      //}
+
+      int nl = basis.dim();
+
+      //Compute values for n <= max_exact_o_
+      {
+        std::vector<long> o_tmp;
+        for (int o=0; o<=max_exact_o_; ++o) {
+          o_tmp.push_back(o);
+        }
+        Tbar_ol_ = basis.compute_Tbar_ol(o_tmp);
+      }
+
+      //Construct mesh for interpolation
+      std::vector<long> o_intpl;
+      {
+        double ratio = 1.02;
+        std::vector<double> weight;
+        construct_log_mesh(o_max, max_exact_o_, ratio, o_vec_, weight);
+
+        //use copy_if?
+        std::set<long> o_set;
+        for (auto o : o_vec_) {
+          if (o > max_exact_o_) {
+            o_set.insert(o);
+            o_set.insert(std::min(o+1, o_max));
+          }
+        }
+        std::copy(o_set.begin(), o_set.end(), std::back_inserter(o_intpl));
+      }
+
+      //Compute values
+      auto Tbar_ol_intpl = basis.compute_Tbar_ol(o_intpl);
+
+      splines_re_.resize(0);
+      splines_im_.resize(0);
+      splines_re_.resize(nl);
+      splines_im_.resize(nl);
+      {
+        std::vector<double> x_array_even, x_array_odd;
+        std::vector<double> y_array;
+
+        for (auto o : o_intpl) {
+          if (o%2==0) {
+            x_array_even.push_back(std::log(1.*o));
+          } else {
+            x_array_odd.push_back(std::log(1.*o));
+          }
+        }
+
+        for (int l=0; l < nl; ++l) {
+          //Real part: l+o=even
+          y_array.resize(0);
+          for (int i = 0; i < o_intpl.size(); ++i) {
+            if ((o_intpl[i]+l)%2==0) {
+              y_array.push_back(Tbar_ol_intpl(i, l).real());
+            }
+          }
+          if (l%2==0) {
+            splines_re_[l].set_points(x_array_even, y_array);
+          } else {
+            splines_re_[l].set_points(x_array_odd, y_array);
+          }
+
+          //Imaginary part: l+o+1=even
+          y_array.resize(0);
+          for (int i = 0; i < o_intpl.size(); ++i) {
+            if ((o_intpl[i]+l)%2==1) {
+              y_array.push_back(Tbar_ol_intpl(i, l).imag());
+            }
+          }
+          if (l%2==0) {
+            splines_im_[l].set_points(x_array_odd, y_array);
+          } else {
+            splines_im_[l].set_points(x_array_even, y_array);
+          }
+        }
+      }
+    }
+
+    inline std::complex<double> operator()(long o, int l) const {
+      if (o >= 0) {
+        return get_value_for_positive_o(o, l);
+      } else {
+        return std::conj(get_value_for_positive_o(-o, l));
+      }
+    }
+
+    const std::vector<long>& data_point() const {
+      return o_vec_;
+    }
+
+   private:
+    int max_exact_o_;
+    std::vector<long> o_vec_;
+    std::vector<tk::spline> splines_re_, splines_im_;
+    Eigen::Tensor<std::complex<double>,2> Tbar_ol_;
+
+    inline std::complex<double> get_value_for_positive_o(long o, int l) const {
+      assert(o>=0);
+      if (o <= max_exact_o_) {
+        return Tbar_ol_(o, l);
+      } else {
+        if ((l+o)%2==0) {
+          return std::complex<double>(
+              splines_re_[l](std::log(1.*o)),
+              0.0
+          );
+        } else {
+          return std::complex<double>(
+              0.0,
+              splines_im_[l](std::log(1.*o))
+          );
+        }
+      }
+    }
+
   };
 
 
