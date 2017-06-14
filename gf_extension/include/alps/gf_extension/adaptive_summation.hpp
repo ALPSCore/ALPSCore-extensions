@@ -3,58 +3,68 @@
 #include <set>
 #include <unordered_map>
 
+#include <boost/lexical_cast.hpp> //for debug
+
 namespace alps {
 namespace gf_extension {
 
 template<typename T, typename F>
 class AdaptiveSummation {
  public:
-  AdaptiveSummation(const F& f, long n_min, long n_max) : f_(f) {
+  AdaptiveSummation(const F& f, long n_min, long n_max) : f_(f), nodes_(), f_cache_() {
+    if (n_max > std::numeric_limits<long>::max()/10) {
+      throw std::runtime_error("n_max is too large.");
+    }
     auto n = create_node(n_min, n_max);
     sum_abs_error_ = n.error;
     nodes_.insert(n);
   }
 
+  double abs_error() const {return sum_abs_error_;}
+
   T evaluate(double eps_abs, int min_points=100) {
     int loop = 0;
-    while (sum_abs_error_ > eps_abs || nodes_.size() < min_points) {
-      //std::cout << loop << " " << sum_abs_error_ << std::endl;
+    int check_interval = 100;
+
+    while (true) {
       auto it_begin = nodes_.begin();
       assert(it_begin->n_max != it_begin->n_min);
       long n_middle = it_begin->n_max == it_begin->n_min+1 ? it_begin->n_min : static_cast<long>((it_begin->n_max+it_begin->n_min)/2);
       node n1 = create_node(it_begin->n_min, n_middle);
       node n2 = create_node(n_middle+1, it_begin->n_max);
 
-      auto de = n1.error + n2.error - it_begin->error;
-
       nodes_.erase(it_begin);
       nodes_.insert(n1);
       nodes_.insert(n2);
 
-      if ( std::abs(sum_abs_error_ + de) < 1e-10*std::abs(sum_abs_error_) ) {
+      if (nodes_.size() > min_points &&
+          loop%check_interval==0 && nodes_.begin()->error < eps_abs) {
         sum_abs_error_ = 0.0;
         for (auto it=nodes_.begin(); it!=nodes_.end(); ++it) {
-          if (std::abs(it->error) < 1e-15*std::abs(sum_abs_error_)) {
+          sum_abs_error_ += it->error;
+          if (sum_abs_error_ > eps_abs) {
             break;
           }
-          sum_abs_error_ += it->error;
         }
-      } else {
-        sum_abs_error_ += de;
+        if (sum_abs_error_ < eps_abs) {
+          break;
+        }
       }
 
       ++ loop;
     }
 
+    sum_abs_error_ = 0.0;
+    for (auto it=nodes_.begin(); it!=nodes_.end(); ++it) {
+      sum_abs_error_ += it->error;
+    }
+
     T sum = nodes_.begin()->value;
     auto it_second = nodes_.begin();
-    std::cout << " " << nodes_.begin()->n_min << " " << nodes_.begin()->n_max << " v = " << nodes_.begin()->value << " +/- " << nodes_.begin()->error << std::endl;
     ++it_second;
     for (auto it = it_second; it != nodes_.end(); ++it) {
-      std::cout << " " << it->n_min << " " << it->n_max << " v = " << it->value << " +/- " << it->error << std::endl;
       sum += it->value;
     }
-    std::cout << "size " << nodes_.size() << std::endl;
     return sum;
   }
 
@@ -62,7 +72,8 @@ class AdaptiveSummation {
  private:
   struct node {
     long n_min, n_max;
-    T value, error;
+    T value;
+    double error;
 
     bool operator>(const node& other) const {
       if (error == other.error) {
@@ -78,8 +89,6 @@ class AdaptiveSummation {
     if (n_min == n_max) {
       return get_f_value(n_min);
     } else {
-      //long n_middle = static_cast<long>(0.5*(n_max + n_min));
-      //return static_cast<double>(n_max-n_min+1) * get_f_value(n_middle);
       return 0.5*static_cast<double>(n_max-n_min+1) * (get_f_value(n_min) + get_f_value(n_max));
     }
   }
@@ -96,11 +105,11 @@ class AdaptiveSummation {
       n.error = 0.0;
     } else {
       long n_middle = n_max == n_min+1 ? n_min : static_cast<long>(0.5*(n_max + n_min));
-      ////std::cout << " debug " << n_min << " " << n_max << " " << n_middle << std::endl;
-      //std::cout << " debug " << n.value << std::endl;
-      //std::cout << " debug " << approximate_sum(n_min, n_middle) << std::endl;
-      //std::cout << " debug " << approximate_sum(n_middle+1, n_max) << std::endl;
       n.error = std::abs(n.value -  approximate_sum(n_min, n_middle) - approximate_sum(n_middle+1, n_max));
+    }
+
+    if (n.error < 0.0) {
+      throw std::runtime_error("error is negative!");
     }
 
     return n;

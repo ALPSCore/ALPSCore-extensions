@@ -1372,6 +1372,7 @@ namespace gf_extension {
     return Tnl;
   }
 
+#ifndef SWIG
   inline
   Eigen::Tensor<std::complex<double>, 2>
   compute_Tnl(int n_min, int n_max, const alps::gf::numerical_mesh<double>& nmesh) {
@@ -1388,6 +1389,25 @@ namespace gf_extension {
     compute_transformation_matrix_to_matsubara(n_min, n_max, nmesh.statistics(), basis_functions, Tnl);
 
     return Tnl;
+  }
+#endif
+
+  inline
+  Eigen::Tensor<std::complex<double>, 2>
+  compute_Tbar_ol(const std::vector<long>& o_vec,
+              const alps::gf::numerical_mesh<double>& nmesh) {
+
+    int nl = nmesh.extent();
+
+    std::vector<alps::gf::piecewise_polynomial<double>> basis_functions(nl);
+    for (int l = 0; l < nl; ++l) {
+      basis_functions[l] = nmesh.basis_function(l);
+    }
+
+    Eigen::Tensor<std::complex<double>,2> Tbar_ol(o_vec.size(), nl);
+    alps::gf_extension::compute_Tbar_ol(o_vec, basis_functions, Tbar_ol);
+
+    return Tbar_ol;
   }
 
   /**

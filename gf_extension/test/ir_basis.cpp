@@ -274,9 +274,10 @@ TYPED_TEST(SplineTest, BasisTypes) {
   TypeParam basis(Lambda, max_dim);
   ASSERT_TRUE(basis.dim()>3);
 
+  double tol = 1e-10;
   long max_n = 1E+10;
 
-  alps::gf_extension::interpolate_Tbar_ol interpolate(basis, max_n);
+  alps::gf_extension::interpolate_Tbar_ol interpolate(basis, tol, max_n);
 
   const auto& data_point = interpolate.data_point();
 

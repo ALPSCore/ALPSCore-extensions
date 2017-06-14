@@ -260,10 +260,18 @@ namespace gf_extension {
         : ir_basis<double>(bosonic_kernel(Lambda), max_dim, cutoff, N) {}
   };
 
+  template<typename T>
+  std::vector<T>
+  to_unique_vec(const std::vector<T>& vec_in) {
+    std::set<T> s(vec_in.begin(), vec_in.end());
+    std::vector<T> vec_out;
+    std::copy(s.begin(), s.end(), std::back_inserter(vec_out));
+    return vec_out;
+  }
 
   class interpolate_Tbar_ol {
    public:
-    interpolate_Tbar_ol(const ir_basis<double>& basis, long o_max=1000000000000000) : max_exact_o_(200) {
+    interpolate_Tbar_ol(const ir_basis<double>& basis, double tol=1e-8, long o_max=1000000000000000) : max_exact_o_(200) {
       //if (max_exact_o_ < 200) {
         //throw std::runtime_error("max_exact_o_ should not be smaller than 200.");
       //}
@@ -279,32 +287,35 @@ namespace gf_extension {
         Tbar_ol_ = basis.compute_Tbar_ol(o_tmp);
       }
 
-      //Construct mesh for interpolation
-      std::vector<long> o_intpl;
-      {
-        double ratio = 1.02;
-        std::vector<double> weight;
-        construct_log_mesh(o_max, max_exact_o_, ratio, o_vec_, weight);
-
-        //use copy_if?
-        std::set<long> o_set;
-        for (auto o : o_vec_) {
-          if (o > max_exact_o_) {
-            o_set.insert(o);
-            o_set.insert(std::min(o+1, o_max));
-          }
-        }
-        std::copy(o_set.begin(), o_set.end(), std::back_inserter(o_intpl));
-      }
+      //Construct initial mesh for interpolation
+      double ratio = 1.02;
+      std::vector<double> weight;
+      construct_log_mesh(o_max, max_exact_o_, ratio, o_vec_, weight);
 
       //Compute values
-      auto Tbar_ol_intpl = basis.compute_Tbar_ol(o_intpl);
+      while (true) {
+        //std::cout << "loop " << std::endl;
+        //Construct a unique set of o from o_vec_
+        std::vector<long> o_intpl;
+        {
+          std::set<long> o_set;
+          for (auto o : o_vec_) {
+            if (o > max_exact_o_) {
+              o_set.insert(o);
+              o_set.insert(std::min(o+1, o_max));
+            }
+          }
+          o_intpl.resize(0);
+          std::copy(o_set.begin(), o_set.end(), std::back_inserter(o_intpl));
+        }
 
-      splines_re_.resize(0);
-      splines_im_.resize(0);
-      splines_re_.resize(nl);
-      splines_im_.resize(nl);
-      {
+        auto Tbar_ol_intpl = basis.compute_Tbar_ol(o_intpl);
+
+        splines_re_.resize(0);
+        splines_im_.resize(0);
+        splines_re_.resize(nl);
+        splines_im_.resize(nl);
+
         std::vector<double> x_array_even, x_array_odd;
         std::vector<double> y_array;
 
@@ -341,6 +352,50 @@ namespace gf_extension {
             splines_im_[l].set_points(x_array_odd, y_array);
           } else {
             splines_im_[l].set_points(x_array_even, y_array);
+          }
+        }
+
+        //Check errors and update o_vec_
+        {
+          bool converged = true;
+
+          std::vector<long> o_check;
+          for (int i=0; i<o_intpl.size()-1; ++i) {
+            if (o_intpl[i+1] - o_intpl[i] > 2) {
+              long omid = static_cast<long>(0.5*(o_intpl[i+1]+o_intpl[i]));
+              o_check.push_back(omid);
+              o_check.push_back(omid+1);
+            }
+          }
+          auto Tbar_ol_check = basis.compute_Tbar_ol(o_check);
+          for (int i=0; i<o_check.size(); ++i) {
+            bool flag = false;
+            auto o = o_check[i];
+            double max_diff = 0.0;
+            for (int l=0; l<nl; ++l) {
+              auto diff = std::abs(Tbar_ol_check(i,l)-this->operator()(o,l));
+              max_diff = std::max(max_diff, diff);
+              if (diff > tol) {
+                flag = true;
+                break;
+              }
+            }
+            //std::cout << o << " max_diff " << max_diff << std::endl;
+            if (flag) {
+              //std::cout << "new o " << i << " : " << o << std::endl;
+              o_vec_.push_back(o);
+              converged = false;
+            }
+          }
+          //unique set
+          o_vec_ = to_unique_vec(o_vec_);
+          std::sort(o_vec_.begin(), o_vec_.end());
+
+          if (converged) {
+            //std::cout << "converged " << o_vec_.size() << std::endl;
+            break;
+          } else {
+            //std::cout << "not converged " << o_vec_.size() << std::endl;
           }
         }
       }
