@@ -687,7 +687,7 @@ namespace gf_extension {
     typedef Eigen::Tensor<std::complex<double>, 2> tensor_t;
 
     //order of polynomials used for representing exponential functions internally.
-    const int k_iw = 8;
+    const int k_iw = 16;
     const int k = pp_func[0].order();
     const int n_section = pp_func[0].num_sections();
 

@@ -271,45 +271,51 @@ namespace gf_extension {
 
   class interpolate_Tbar_ol {
    public:
-    interpolate_Tbar_ol(const ir_basis<double>& basis, double tol=1e-8, long o_max=1000000000000000) : max_exact_o_(200) {
-      //if (max_exact_o_ < 200) {
-        //throw std::runtime_error("max_exact_o_ should not be smaller than 200.");
-      //}
-
+    interpolate_Tbar_ol(const ir_basis<double>& basis, double tol=1e-8, long o_min=0, long o_max=1000000000000000) {
       int nl = basis.dim();
 
       //Compute values for n <= max_exact_o_
       {
-        std::vector<long> o_tmp;
-        for (int o=0; o<=max_exact_o_; ++o) {
-          o_tmp.push_back(o);
-        }
-        Tbar_ol_ = basis.compute_Tbar_ol(o_tmp);
+        //std::vector<long> o_tmp;
+        //for (int o=0; o<=max_exact_o_; ++o) {
+          //o_tmp.push_back(o);
+        //}
+        //Tbar_ol_ = basis.compute_Tbar_ol(o_tmp);
       }
 
+      if (o_max <= 1) {
+        throw std::runtime_error("o_max must be larger than 1.");
+      }
+      if (o_max > std::numeric_limits<long>::max()/10) {
+        throw std::runtime_error("o_max is too large.");
+      }
+      if (o_min >= o_max) {
+        throw std::runtime_error("o_min >= o_max!");
+      }
+
+      //log mesh
+      double ratio = 1.01;
+      o_vec_.push_back(o_min);
+      while(true) {
+        long new_elem = std::max(o_vec_.back()+1, static_cast<long>(ratio * o_vec_.back()) );
+        if (new_elem > o_max) {
+          break;
+        }
+        //std::cout << new_elem << std::endl;
+        o_vec_.push_back(new_elem);
+      }
+      o_vec_.push_back(o_max);
+      o_vec_ = to_unique_vec(o_vec_);
+
       //Construct initial mesh for interpolation
-      double ratio = 1.02;
-      std::vector<double> weight;
-      construct_log_mesh(o_max, max_exact_o_, ratio, o_vec_, weight);
+      //double ratio = 1.1;
+      //std::vector<double> weight;
+      //construct_log_mesh(o_max, max_exact_o_, ratio, o_vec_, weight);
 
       //Compute values
       while (true) {
-        //std::cout << "loop " << std::endl;
-        //Construct a unique set of o from o_vec_
-        std::vector<long> o_intpl;
-        {
-          std::set<long> o_set;
-          for (auto o : o_vec_) {
-            if (o > max_exact_o_) {
-              o_set.insert(o);
-              o_set.insert(std::min(o+1, o_max));
-            }
-          }
-          o_intpl.resize(0);
-          std::copy(o_set.begin(), o_set.end(), std::back_inserter(o_intpl));
-        }
-
-        auto Tbar_ol_intpl = basis.compute_Tbar_ol(o_intpl);
+        std::cout << "loop " << std::endl;
+        register_to_cache(basis, o_vec_);
 
         splines_re_.resize(0);
         splines_im_.resize(0);
@@ -319,7 +325,10 @@ namespace gf_extension {
         std::vector<double> x_array_even, x_array_odd;
         std::vector<double> y_array;
 
-        for (auto o : o_intpl) {
+        for (auto o : o_vec_) {
+          if (o==0) {
+            continue;
+          }
           if (o%2==0) {
             x_array_even.push_back(std::log(1.*o));
           } else {
@@ -330,9 +339,12 @@ namespace gf_extension {
         for (int l=0; l < nl; ++l) {
           //Real part: l+o=even
           y_array.resize(0);
-          for (int i = 0; i < o_intpl.size(); ++i) {
-            if ((o_intpl[i]+l)%2==0) {
-              y_array.push_back(Tbar_ol_intpl(i, l).real());
+          for (int i = 0; i < o_vec_.size(); ++i) {
+            if (o_vec_[i]==0) {
+              continue;
+            }
+            if ((o_vec_[i]+l)%2==0) {
+              y_array.push_back(get_value_from_cache(o_vec_[i], l).real());
             }
           }
           if (l%2==0) {
@@ -343,9 +355,12 @@ namespace gf_extension {
 
           //Imaginary part: l+o+1=even
           y_array.resize(0);
-          for (int i = 0; i < o_intpl.size(); ++i) {
-            if ((o_intpl[i]+l)%2==1) {
-              y_array.push_back(Tbar_ol_intpl(i, l).imag());
+          for (int i = 0; i < o_vec_.size(); ++i) {
+            if (o_vec_[i]==0) {
+              continue;
+            }
+            if ((o_vec_[i]+l)%2==1) {
+              y_array.push_back(get_value_from_cache(o_vec_[i], l).imag());
             }
           }
           if (l%2==0) {
@@ -360,42 +375,47 @@ namespace gf_extension {
           bool converged = true;
 
           std::vector<long> o_check;
-          for (int i=0; i<o_intpl.size()-1; ++i) {
-            if (o_intpl[i+1] - o_intpl[i] > 2) {
-              long omid = static_cast<long>(0.5*(o_intpl[i+1]+o_intpl[i]));
+          for (int i=0; i<o_vec_.size()-1; ++i) {
+            //std::cout << "o_vec " << o_vec_[i] << std::endl;
+            if (o_vec_[i+1] - o_vec_[i] > 2) {
+              long omid = static_cast<long>(0.5*o_vec_[i+1]+0.5*o_vec_[i]);
               o_check.push_back(omid);
               o_check.push_back(omid+1);
             }
           }
+
           auto Tbar_ol_check = basis.compute_Tbar_ol(o_check);
+
+          double max_diff = 0.0;
           for (int i=0; i<o_check.size(); ++i) {
             bool flag = false;
             auto o = o_check[i];
-            double max_diff = 0.0;
             for (int l=0; l<nl; ++l) {
-              auto diff = std::abs(Tbar_ol_check(i,l)-this->operator()(o,l));
+              //auto diff = std::abs(Tbar_ol_check(i,l)-this->operator()(o,l));
+              auto v1 = Tbar_ol_check(i,l);
+              auto v2 = this->operator()(o,l);
+              auto max_abs = std::max(std::abs(v1), std::abs(v2));
+              //auto diff = std::abs(v1-v2)/std::abs(v1);
+              auto diff = std::abs(v1-v2);
               max_diff = std::max(max_diff, diff);
               if (diff > tol) {
+                //if (diff > tol) {
                 flag = true;
                 break;
               }
             }
-            //std::cout << o << " max_diff " << max_diff << std::endl;
             if (flag) {
-              //std::cout << "new o " << i << " : " << o << std::endl;
               o_vec_.push_back(o);
               converged = false;
             }
           }
+          std::cout << "diff " << max_diff << std::endl;
           //unique set
           o_vec_ = to_unique_vec(o_vec_);
           std::sort(o_vec_.begin(), o_vec_.end());
 
           if (converged) {
-            //std::cout << "converged " << o_vec_.size() << std::endl;
             break;
-          } else {
-            //std::cout << "not converged " << o_vec_.size() << std::endl;
           }
         }
       }
@@ -403,9 +423,9 @@ namespace gf_extension {
 
     inline std::complex<double> operator()(long o, int l) const {
       if (o >= 0) {
-        return get_value_for_positive_o(o, l);
+        return get_interpolated_value_for_positive_o(o, l);
       } else {
-        return std::conj(get_value_for_positive_o(-o, l));
+        return std::conj(get_interpolated_value_for_positive_o(-o, l));
       }
     }
 
@@ -414,15 +434,38 @@ namespace gf_extension {
     }
 
    private:
-    int max_exact_o_;
     std::vector<long> o_vec_;
     std::vector<tk::spline> splines_re_, splines_im_;
     Eigen::Tensor<std::complex<double>,2> Tbar_ol_;
 
-    inline std::complex<double> get_value_for_positive_o(long o, int l) const {
+    std::map<long,std::vector<std::complex<double>>> cache_;
+
+    void register_to_cache(const ir_basis<double>& basis, const std::vector<long>& o_vec) {
+      //compute new values
+      std::vector<long> o_vec_new;
+      for (auto o : o_vec) {
+        if (cache_.find(o) == cache_.end()) {
+          o_vec_new.push_back(o);
+        }
+      }
+
+      //std::cout << "register " << o_vec.size() << " " << o_vec_new.size() << std::endl;
+
+      auto Tbar_ol_new = basis.compute_Tbar_ol(o_vec_new);
+      std::vector<std::complex<double>> vec(basis.dim());
+      for (int i=0; i<o_vec_new.size(); ++i) {
+        for (int l=0; l < basis.dim(); ++l) {
+          vec[l] = Tbar_ol_new(i,l);
+        }
+        cache_[o_vec_new[i]] = vec;
+      }
+    }
+
+    std::complex<double> get_interpolated_value_for_positive_o(long o, int l) const {
       assert(o>=0);
-      if (o <= max_exact_o_) {
-        return Tbar_ol_(o, l);
+      auto it = cache_.find(o);
+      if (it != cache_.end()) {
+        return it->second[l];
       } else {
         if ((l+o)%2==0) {
           return std::complex<double>(
@@ -435,6 +478,15 @@ namespace gf_extension {
               splines_im_[l](std::log(1.*o))
           );
         }
+      }
+    }
+
+    std::complex<double> get_value_from_cache(long o, int l) const {
+      auto it = cache_.find(o);
+      if (it != cache_.end()) {
+        return it->second[l];
+      } else {
+        throw std::runtime_error("No corresponding entry in cache");
       }
     }
 

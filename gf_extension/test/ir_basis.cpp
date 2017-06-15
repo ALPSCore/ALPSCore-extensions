@@ -275,9 +275,10 @@ TYPED_TEST(SplineTest, BasisTypes) {
   ASSERT_TRUE(basis.dim()>3);
 
   double tol = 1e-10;
-  long max_n = 1E+10;
+  long min_n = 1000;
+  long max_n = 10000000000;
 
-  alps::gf_extension::interpolate_Tbar_ol interpolate(basis, tol, max_n);
+  alps::gf_extension::interpolate_Tbar_ol interpolate(basis, tol, min_n, max_n);
 
   const auto& data_point = interpolate.data_point();
 
@@ -291,12 +292,14 @@ TYPED_TEST(SplineTest, BasisTypes) {
   auto Tbar_ol = basis.compute_Tbar_ol(o_check);
 
   for (int i=0; i<o_check.size(); ++i) {
-    for (int l = 0; l < 1; ++l) {
+    for (int l = 0; l < basis.dim(); ++l) {
       auto o = o_check[i];
       auto v = interpolate(o_check[i], l);
 
-      ASSERT_NEAR(v.real(), Tbar_ol(i,l).real(), 1e-8);
-      ASSERT_NEAR(v.imag(), Tbar_ol(i,l).imag(), 1e-8);
+      //std::cout << "o = " << o << " l= " << l << std::endl;
+
+      ASSERT_NEAR(v.real(), Tbar_ol(i,l).real(), 1e-6);
+      ASSERT_NEAR(v.imag(), Tbar_ol(i,l).imag(), 1e-6);
 
       if ((l+o)%2==0) {
         ASSERT_NEAR(std::abs(Tbar_ol(i,l).imag()), 0.0, 1e-8);
