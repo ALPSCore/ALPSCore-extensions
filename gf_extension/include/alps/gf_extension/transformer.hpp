@@ -413,6 +413,7 @@ namespace gf_extension {
       }
     }
 
+    inline
     std::vector<double> construct_mesh_from_zeros(const alps::gf::piecewise_polynomial<double>& f) {
       std::vector<double> points;
       double eps = 1e-12;
@@ -528,6 +529,7 @@ namespace gf_extension {
       }
     }
 
+    inline
     std::vector<double>
     construct_DE_sections(double a, double b, int Nx, double tmin=3.0) {
       if (b < a) {
@@ -1654,6 +1656,7 @@ namespace gf_extension {
     return g2;
   }
 
+  inline
   Eigen::Tensor<double,3>
   compute_transformation_tensor_G2_bubble_vector_to_matrix(
       const alps::gf::numerical_mesh<double>& mesh_f_G2) {
