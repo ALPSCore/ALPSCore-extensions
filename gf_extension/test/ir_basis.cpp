@@ -156,6 +156,55 @@ TEST(PiecewisePolynomial, IntegralWithExp) {
 }
  */
 
+TEST(Legendre, Nodes) {
+  double eps = 1e-8;
+
+  std::vector<double> nodes_l0 = alps::gf_extension::detail::compute_legendre_nodes(0);
+  ASSERT_TRUE(nodes_l0.size()==0);
+
+  std::vector<double> nodes_l1 = alps::gf_extension::detail::compute_legendre_nodes(1);
+  ASSERT_TRUE(nodes_l1.size()==1);
+  ASSERT_TRUE(std::abs(nodes_l1[0]-0.0) < eps);
+
+  std::vector<int> l_vec{1, 2, 3, 4, 50, 100, 200};
+  for (auto l : l_vec) {
+    std::vector<double> nodes = alps::gf_extension::detail::compute_legendre_nodes(l);
+    ASSERT_TRUE(nodes.size()==l);
+    for (int i=0; i<l; ++i) {
+      ASSERT_TRUE(std::abs(boost::math::legendre_p(l, nodes[i])) < eps);
+      if (i<l-1) {
+        ASSERT_TRUE(std::abs(nodes[i]-nodes[i+1]) > eps);
+      }
+    }
+  }
+}
+
+TEST(Legendre, PiecewisePolynomials) {
+  double eps = 1e-2;
+  int Nl = 100;
+
+  try {
+    std::vector<alps::gf::piecewise_polynomial<double>>
+        polynomials = alps::gf_extension::construct_cubic_spline_normalized_legendre_polynomials(Nl);
+
+    double de_cutoff = 2.5;
+    int N = 1000;
+    std::vector<double> tx_vec = alps::gf_extension::detail::linspace<double>(-de_cutoff, de_cutoff, N);
+    std::vector<double> x_vec(N);
+    for (int i = 0; i < N; ++i) {
+      x_vec[i] = std::tanh(0.5 * M_PI * std::sinh(tx_vec[i]));
+    }
+
+    for (int l = 0; l < Nl; ++l) {
+      for (auto x : x_vec) {
+        ASSERT_NEAR(polynomials[l].compute_value(x), boost::math::legendre_p(l, x) * std::sqrt(l+0.5), eps);
+      }
+    }
+  } catch (const std::exception& e) {
+    FAIL() << e.what();
+  }
+}
+
 template<class T>
 class HighTTest : public testing::Test {
 };
@@ -274,7 +323,7 @@ TYPED_TEST(SplineTest, BasisTypes) {
   TypeParam basis(Lambda, max_dim);
   ASSERT_TRUE(basis.dim()>3);
 
-  double tol = 1e-10;
+  double tol = 1e-8;
   long min_n = 1000;
   long max_n = 10000000000;
 

@@ -1,5 +1,9 @@
 #include "../ir_basis.hpp"
 
+#include <algorithm>
+
+#include <boost/math/special_functions/legendre.hpp>
+
 #include "spline.hpp"
 
 extern "C" void dgesvd_(const char *jobu, const char *jobvt,
@@ -17,14 +21,6 @@ extern "C" void dgesdd_(const char *jobz,
 namespace alps {
   namespace gf_extension {
     namespace detail {
-      template<typename T>
-      inline std::vector<T> linspace(T minval, T maxval, int N) {
-        std::vector<T> r(N);
-        for (int i = 0; i < N; ++i) {
-          r[i] = i * (maxval - minval) / (N - 1) + minval;
-        }
-        return r;
-      }
 
       template<class Matrix, class Vector>
       void svd_square_matrix(Matrix &K, int n, Vector &S, Matrix &Vt, Matrix &U) {
@@ -56,6 +52,7 @@ namespace alps {
           throw std::runtime_error("SVD failed to converge!");
         }
       }
+
     }//namespace detail
 
     /***
@@ -82,8 +79,10 @@ namespace alps {
           coeff[s][p] = spline.get_coeff(s, p);
         }
       }
+      alps::gf::piecewise_polynomial<T> tmp(n_section, x_array, coeff);
       return alps::gf::piecewise_polynomial<T>(n_section, x_array, coeff);
     };
+
 
     /// do a svd for the given parity sector (even or odd)
     template<typename T>
@@ -185,40 +184,47 @@ namespace alps {
 
     template<typename Scalar>
     ir_basis<Scalar>::ir_basis(const kernel <Scalar> &knl, int max_dim, double cutoff, int N) : p_knl_(knl.clone()) {
-      std::vector<double> even_svalues, odd_svalues, svalues;
-      std::vector<alps::gf::piecewise_polynomial<double> > even_basis_functions, odd_basis_functions;
-
-      do_svd<Scalar>(*p_knl_, 1, N, cutoff, even_svalues, even_basis_functions);
-      do_svd<Scalar>(*p_knl_, -1, N, cutoff, odd_svalues, odd_basis_functions);
-
-      //Merge
-      basis_functions_.resize(0);
-      assert(even_basis_functions.size() == even_svalues.size());
-      assert(odd_basis_functions.size() == odd_svalues.size());
-      for (int pair = 0; pair < std::max(even_svalues.size(), odd_svalues.size()); ++pair) {
-        if (pair < even_svalues.size()) {
-          svalues.push_back(even_svalues[pair]);
-          basis_functions_.push_back(even_basis_functions[pair]);
-        }
-        if (pair < odd_svalues.size()) {
-          svalues.push_back(odd_svalues[pair]);
-          basis_functions_.push_back(odd_basis_functions[pair]);
-        }
+      if (max_dim > 100) {
+        throw std::runtime_error("Error: max_dim > 100!");
       }
+      if (knl.Lambda() == 0.0) {
+        basis_functions_ = construct_cubic_spline_normalized_legendre_polynomials(max_dim);
+      } else {
+        std::vector<double> even_svalues, odd_svalues, svalues;
+        std::vector<alps::gf::piecewise_polynomial<double> > even_basis_functions, odd_basis_functions;
 
-      assert(even_svalues.size() + odd_svalues.size() == svalues.size());
+        do_svd<Scalar>(*p_knl_, 1, N, cutoff, even_svalues, even_basis_functions);
+        do_svd<Scalar>(*p_knl_, -1, N, cutoff, odd_svalues, odd_basis_functions);
 
-      //use max_dim
-      if (svalues.size() > max_dim) {
-        svalues.resize(max_dim);
-        basis_functions_.resize(max_dim);
-      }
+        //Merge
+        basis_functions_.resize(0);
+        assert(even_basis_functions.size() == even_svalues.size());
+        assert(odd_basis_functions.size() == odd_svalues.size());
+        for (int pair = 0; pair < std::max(even_svalues.size(), odd_svalues.size()); ++pair) {
+          if (pair < even_svalues.size()) {
+            svalues.push_back(even_svalues[pair]);
+            basis_functions_.push_back(even_basis_functions[pair]);
+          }
+          if (pair < odd_svalues.size()) {
+            svalues.push_back(odd_svalues[pair]);
+            basis_functions_.push_back(odd_basis_functions[pair]);
+          }
+        }
 
-      //Check
-      for (int i = 0; i < svalues.size() - 1; ++i) {
-        if (svalues[i] < svalues[i + 1]) {
-          //FIXME: SHOULD NOT THROW IN A CONSTRUCTOR
-          throw std::runtime_error("Even and odd basis functions do not appear alternately.");
+        assert(even_svalues.size() + odd_svalues.size() == svalues.size());
+
+        //use max_dim
+        if (svalues.size() > max_dim) {
+          svalues.resize(max_dim);
+          basis_functions_.resize(max_dim);
+        }
+
+        //Check
+        for (int i = 0; i < svalues.size() - 1; ++i) {
+          if (svalues[i] < svalues[i + 1]) {
+            //FIXME: SHOULD NOT THROW IN A CONSTRUCTOR
+            throw std::runtime_error("Even and odd basis functions do not appear alternately.");
+          }
         }
       }
     };

@@ -14,6 +14,7 @@
 #include <alps/gf/mesh.hpp>
 #include "transformer.hpp"
 #include "piecewise_polynomial.hpp"
+#include "aux.hpp"
 
 #include "detail/spline.hpp"
 
@@ -31,6 +32,56 @@ namespace gf_extension {
       const std::vector<double> &x_array, const std::vector<double> &y_array);
 
   /**
+   * Construct Piecewise polynomials approximately representing Legenre polynomials normalized to 1 on [-1,1]
+   * @param Nl number of Legendre polynomials
+   * @return Piecewise polynomials
+   */
+  inline std::vector<alps::gf::piecewise_polynomial<double>>
+  construct_cubic_spline_normalized_legendre_polynomials(int Nl) {
+    int Nl_max = 100;
+    int M = 40;
+    double eps = 1e-10;
+
+    std::vector<double> nodes = detail::compute_legendre_nodes(Nl_max);
+    assert(Nl_max%2 == 0);
+    std::vector<double> positve_nodes;
+    for (auto n: nodes) {
+      if (n > 0.0) {
+        positve_nodes.push_back(n);
+      }
+    }
+    positve_nodes.push_back(0);
+    positve_nodes.push_back(1);
+    std::sort(positve_nodes.begin(), positve_nodes.end());
+
+    std::vector<double> x_points;
+    for(int i=0; i<positve_nodes.size()-1; ++i) {
+      double dx = (positve_nodes[i+1] - positve_nodes[i])/M;
+      for (int j=0; j<M; ++j) {
+        double x = positve_nodes[i] + dx * j;
+        x_points.push_back(x);
+        if (std::abs(x) > eps) {
+          x_points.push_back(-x);
+        }
+      }
+    }
+    x_points.push_back(1);
+    x_points.push_back(-1);
+    std::sort(x_points.begin(), x_points.end());
+
+    std::vector<alps::gf::piecewise_polynomial<double>> results;
+    std::vector<double> y_vals(x_points.size());
+    for (int l=0; l<Nl; ++l) {
+      for (int j=0; j < x_points.size(); ++j) {
+        y_vals[j] = boost::math::legendre_p(l, x_points[j]) * std::sqrt(l+0.5);
+      }
+      results.push_back(construct_piecewise_polynomial_cspline<double>(x_points, y_vals));
+    }
+
+    return results;
+  }
+
+  /**
    * Abstract class representing an analytical continuation kernel
    */
   template<typename T>
@@ -43,6 +94,9 @@ namespace gf_extension {
 
     /// return statistics
     virtual alps::gf::statistics::statistics_type get_statistics() const = 0;
+
+    /// return lambda
+    virtual double Lambda() const = 0;
 
 #ifndef SWIG
     /// return a reference to a copy
@@ -75,6 +129,10 @@ namespace gf_extension {
 
     alps::gf::statistics::statistics_type get_statistics() const {
       return alps::gf::statistics::FERMIONIC;
+    }
+
+    double Lambda() const {
+      return Lambda_;
     }
 
 #ifndef SWIG
@@ -110,6 +168,10 @@ namespace gf_extension {
 
     alps::gf::statistics::statistics_type get_statistics() const {
       return alps::gf::statistics::BOSONIC;
+    }
+
+    double Lambda() const {
+      return Lambda_;
     }
 
 #ifndef SWIG
@@ -314,7 +376,7 @@ namespace gf_extension {
 
       //Compute values
       while (true) {
-        std::cout << "loop " << std::endl;
+        //std::cout << "loop " << std::endl;
         register_to_cache(basis, o_vec_);
 
         splines_re_.resize(0);
@@ -409,7 +471,7 @@ namespace gf_extension {
               converged = false;
             }
           }
-          std::cout << "diff " << max_diff << std::endl;
+          //std::cout << "diff " << max_diff << std::endl;
           //unique set
           o_vec_ = to_unique_vec(o_vec_);
           std::sort(o_vec_.begin(), o_vec_.end());

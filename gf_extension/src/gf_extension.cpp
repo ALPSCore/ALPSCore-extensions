@@ -1,6 +1,7 @@
 #include <alps/gf_extension/transformer.hpp>
 
 #include <alps/gf_extension/ir_basis.hpp>
+#include <alps/gf_extension/aux.hpp>
 #include <alps/gf_extension/detail/ir_basis.ipp>
 
 namespace alps {
