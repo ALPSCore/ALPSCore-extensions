@@ -189,6 +189,7 @@ namespace alps {
       }
       if (knl.Lambda() == 0.0) {
         basis_functions_ = construct_cubic_spline_normalized_legendre_polynomials(max_dim);
+        orthonormalize(basis_functions_);
       } else {
         std::vector<double> even_svalues, odd_svalues, svalues;
         std::vector<alps::gf::piecewise_polynomial<double> > even_basis_functions, odd_basis_functions;
