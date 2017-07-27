@@ -205,6 +205,22 @@ TEST(Legendre, PiecewisePolynomials) {
   }
 }
 
+TEST(IrBasis, LegendreLimit) {
+  int dim = 100;
+  double Lambda = 0.0;
+  alps::gf_extension::fermionic_ir_basis basis(Lambda, dim);
+
+  ASSERT_TRUE(basis.dim() == dim);
+
+  const int N = 10;
+  for (int l=0; l<dim; ++l) {
+    for (int i = 1; i < N - 1; ++i) {
+      const double x = i * (2.0 / (N - 1)) - 1.0;
+      ASSERT_NEAR(basis(l).compute_value(x), boost::math::legendre_p(l, x) * std::sqrt(l+0.5), 1e-2);
+    }
+  }
+}
+
 template<class T>
 class HighTTest : public testing::Test {
 };
